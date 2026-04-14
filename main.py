@@ -7,7 +7,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from config import get_settings
 from models.database import engine, Base
-from routers import auth, dashboard
+from routers import auth, dashboard, vehiculos, incidentes
+
+# Importar todos los modelos para que SQLAlchemy los reconozca en metadata
+# IMPORTANTE: Estos imports son necesarios para que Base.metadata.create_all() funcione
+from models.user import Usuario, Rol
+from models.marca_modelo import Marca, Modelo
+from models.vehiculo import Vehiculo
+from models.incidente import Incidente, Evidencia
 
 # Obtener configuración
 settings = get_settings()
@@ -77,17 +84,26 @@ def _create_default_roles():
     """
     Helper que crea los roles por defecto en la base de datos.
     Se ejecuta solo si los roles no existen.
+    
+    Roles creados:
+    1. admin - Administrador del sistema (acceso completo)
+    2. operador - Operador de emergencias (gestión de incidentes)
+    3. tecnico - Técnico de taller (atención de usuarios)
+    4. cliente - Usuario final (reporte de incidentes)
+    5. gestor_taller - Gestor de taller (admin de recursos)
     """
     from models.database import SessionLocal
     from models.user import Rol
     
     db = SessionLocal()
     try:
-        # Definir roles por defecto
+        # Definir roles por defecto (orden importante, se usan los IDs en seed-test-users)
         roles_default = [
-            {"nombre": "admin", "descripcion": "Administrador del sistema"},
-            {"nombre": "operador", "descripcion": "Operador de emergencias"},
-            {"nombre": "usuario", "descripcion": "Usuario estándar"},
+            {"nombre": "admin", "descripcion": "Administrador del sistema - Acceso completo"},
+            {"nombre": "operador", "descripcion": "Operador de emergencias - Gestión de incidentes"},
+            {"nombre": "tecnico", "descripcion": "Técnico de taller - Atención de usuarios"},
+            {"nombre": "cliente", "descripcion": "Cliente/Usuario final - Reporte de incidentes"},
+            {"nombre": "gestor_taller", "descripcion": "Gestor de taller - Administración de recursos"},
         ]
         
         # Crear roles si no existen
@@ -124,6 +140,12 @@ app.include_router(auth.router)
 
 # Router de Dashboard - Proporciona métricas según el rol del usuario
 app.include_router(dashboard.router)
+
+# Router de Vehículos - Gestión de marcas, modelos y vehículos del usuario
+app.include_router(vehiculos.router)
+
+# Router de Incidentes - Reporte de emergencias y evidencia multimedia
+app.include_router(incidentes.router)
 
 
 # Endpoint raíz para verificar que la API está activa

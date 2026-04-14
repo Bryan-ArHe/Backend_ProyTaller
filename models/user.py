@@ -61,8 +61,10 @@ class Usuario(Base):
     estado_cuenta = Column(Enum(EstadoCuenta), default=EstadoCuenta.ACTIVO, nullable=False)
     fecha_registro = Column(DateTime, default=datetime.utcnow, nullable=False)
     
-    # Relación con rol
+    # Relaciones
     rol = relationship("Rol", back_populates="usuarios")
+    vehiculos = relationship("Vehiculo", back_populates="cliente", cascade="all, delete-orphan")
+    incidentes = relationship("Incidente", back_populates="cliente", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<Usuario(id={self.id}, email='{self.email}', estado={self.estado_cuenta})>"

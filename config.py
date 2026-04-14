@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     api_version: str = "1.0.0"
     debug: bool = True
     
+    # Generación de datos de prueba
+    debug_mode: bool = True  # Habilita endpoint POST /auth/seed-test-users
+    
     class Config:
         env_file = ".env"
         case_sensitive = False

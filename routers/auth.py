@@ -11,6 +11,9 @@ from schemas.user import UsuarioCreate, UsuarioResponse, LoginData, Token
 from security.password import hash_password, verify_password
 from security.jwt_handler import create_access_token
 from dependencies import get_current_user
+from config import get_settings
+from pydantic import BaseModel
+from typing import List
 
 # Crear el router de autenticación
 router = APIRouter(
@@ -186,3 +189,200 @@ def get_current_user_info(current_user: UsuarioResponse = Depends(get_current_us
             Authorization: Bearer <token_jwt>
     """
     return current_user
+
+
+# ============================================================================
+# ESQUEMAS PARA SEED DATA
+# ============================================================================
+
+class UsuarioTestData(BaseModel):
+    """Esquema para datos de usuario de prueba con credenciales"""
+    email: str
+    password: str
+    telefono: str
+    id_rol: int
+    rol_nombre: str
+    descripcion: str
+    
+    class Config:
+        from_attributes = True
+
+
+class SeedDataResponse(BaseModel):
+    """Respuesta del endpoint de seed con lista de usuarios creados"""
+    mensaje: str
+    total_usuarios_creados: int
+    usuarios: List[UsuarioTestData]
+
+
+# ============================================================================
+# ENDPOINT: GENERAR DATOS DE PRUEBA
+# ============================================================================
+
+@router.post("/seed-test-users", response_model=SeedDataResponse, status_code=201)
+def seed_test_users(db: Session = Depends(get_db)):
+    """
+    Endpoint para generar usuarios de prueba con todos los roles del sistema.
+    
+    ⚠️ **SOLO DISPONIBLE EN MODO DEBUG**
+    
+    Este endpoint crea automáticamente 5 usuarios de prueba, uno para cada rol:
+    - Admin: Administrador del sistema (acceso completo)
+    - Operador: Operador de emergencias (gestión de incidentes)
+    - Técnico: Técnico de taller (atención de usuarios)
+    - Cliente: Usuario final (reporte de incidentes)
+    - Gestor Taller: Gestor de taller (admin de recursos)
+    
+    **Validaciones:**
+    - Solo funciona si DEBUG_MODE=True en config
+    - Valida que los usuarios no existan antes de crearlos
+    - Si un usuario ya existe, lo omite
+    - Devuelve lista de usuarios creados con sus credenciales
+    
+    **Respuesta:**
+    ```json
+    {
+        "mensaje": "Usuarios de prueba creados exitosamente",
+        "total_usuarios_creados": 5,
+        "usuarios": [
+            {
+                "email": "admin@example.com",
+                "password": "TestPassword123!",
+                "telefono": "3001111111",
+                "id_rol": 1,
+                "rol_nombre": "admin",
+                "descripcion": "Admin del sistema"
+            },
+            ...
+        ]
+    }
+    ```
+    
+    Returns:
+        SeedDataResponse: Mensaje de éxito y lista de usuarios creados con credenciales
+        
+    Raises:
+        HTTPException 403: Si DEBUG_MODE está deshabilitado (no es desarrollo)
+        HTTPException 400: Si ocurre un error al crear usuarios
+        
+    Ejemplo de request:
+        POST /auth/seed-test-users
+        (Sin body, no requiere autenticación)
+    """
+    # Obtener config
+    settings = get_settings()
+    
+    # Verificar que el endpoint solo está disponible en modo debug
+    if not settings.debug_mode:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="El endpoint /auth/seed-test-users solo está disponible en modo DEBUG. "
+                   "Habilita DEBUG_MODE=True en .env para modo desarrollo."
+        )
+    
+    # Definir usuarios de prueba
+    usuarios_prueba = [
+        {
+            "email": "admin@example.com",
+            "password": "TestPassword123!",
+            "telefono": "3001111111",
+            "id_rol": 1,
+            "rol_nombre": "admin",
+            "descripcion": "Admin del sistema - Acceso completo"
+        },
+        {
+            "email": "operador@example.com",
+            "password": "TestPassword123!",
+            "telefono": "3002222222",
+            "id_rol": 2,
+            "rol_nombre": "operador",
+            "descripcion": "Operador de emergencias - Gestión de incidentes"
+        },
+        {
+            "email": "tecnico@example.com",
+            "password": "TestPassword123!",
+            "telefono": "3003333333",
+            "id_rol": 3,
+            "rol_nombre": "tecnico",
+            "descripcion": "Técnico de taller - Atención de usuarios"
+        },
+        {
+            "email": "cliente@example.com",
+            "password": "TestPassword123!",
+            "telefono": "3004444444",
+            "id_rol": 4,
+            "rol_nombre": "cliente",
+            "descripcion": "Cliente/Usuario final - Reporte de incidentes"
+        },
+        {
+            "email": "gestor_taller@example.com",
+            "password": "TestPassword123!",
+            "telefono": "3005555555",
+            "id_rol": 5,
+            "rol_nombre": "gestor_taller",
+            "descripcion": "Gestor de taller - Admin de recursos"
+        }
+    ]
+    
+    usuarios_creados = []
+    
+    try:
+        for usuario_data in usuarios_prueba:
+            # Verificar que el usuario no exista
+            usuario_existente = db.query(Usuario).filter(
+                Usuario.email == usuario_data["email"]
+            ).first()
+            
+            if usuario_existente:
+                print(f"⏭️  Usuario {usuario_data['email']} ya existe, omitiendo...")
+                continue
+            
+            # Verificar que el rol existe
+            rol = db.query(Rol).filter(Rol.id == usuario_data["id_rol"]).first()
+            if not rol:
+                print(f"⚠️  Rol {usuario_data['id_rol']} no existe, omitiendo usuario {usuario_data['email']}")
+                continue
+            
+            # Crear usuario
+            password_hash = hash_password(usuario_data["password"])
+            nuevo_usuario = Usuario(
+                email=usuario_data["email"],
+                telefono=usuario_data["telefono"],
+                password_hash=password_hash,
+                id_rol=usuario_data["id_rol"],
+                estado_cuenta=EstadoCuenta.ACTIVO
+            )
+            
+            db.add(nuevo_usuario)
+            db.flush()  # Flush para obtener el ID
+            
+            # Agregar a lista de creados (con credenciales)
+            usuarios_creados.append(
+                UsuarioTestData(
+                    email=usuario_data["email"],
+                    password=usuario_data["password"],  # Retornar la contraseña en texto plano SOLO para desarrollo
+                    telefono=usuario_data["telefono"],
+                    id_rol=usuario_data["id_rol"],
+                    rol_nombre=usuario_data["rol_nombre"],
+                    descripcion=usuario_data["descripcion"]
+                )
+            )
+            
+            print(f"✅ Usuario {usuario_data['email']} creado exitosamente")
+        
+        # Commit final
+        db.commit()
+        
+        return SeedDataResponse(
+            mensaje="Usuarios de prueba creados exitosamente. "
+                    "Usa estas credenciales para testear el sistema.",
+            total_usuarios_creados=len(usuarios_creados),
+            usuarios=usuarios_creados
+        )
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Error al crear usuarios de prueba: {str(e)}"
+        )
