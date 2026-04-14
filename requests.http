@@ -1,0 +1,138 @@
+### Ejemplo de Peticiones HTTP para VS Code REST Client
+### Instala la extensión "REST Client" (humao.rest-client) para ejecutar estas peticiones directamente
+
+@baseUrl = http://localhost:8000
+@contentType = application/json
+
+### Health Check
+GET {{baseUrl}}/health
+
+
+### ==================== AUTENTICACIÓN ====================
+
+### 1. Registrar un nuevo usuario
+POST {{baseUrl}}/auth/register
+Content-Type: {{contentType}}
+
+{
+  "email": "juan@example.com",
+  "telefono": "3001234567",
+  "password": "MiContraseña123",
+  "id_rol": 3
+}
+
+### 2. Registrar usuario adicional (operador)
+POST {{baseUrl}}/auth/register
+Content-Type: {{contentType}}
+
+{
+  "email": "operador@example.com",
+  "telefono": "3109876543",
+  "password": "OperadorPass456",
+  "id_rol": 2
+}
+
+### 3. Registrar usuario admin
+POST {{baseUrl}}/auth/register
+Content-Type: {{contentType}}
+
+{
+  "email": "admin@example.com",
+  "telefono": "3111111111",
+  "password": "AdminPass789",
+  "id_rol": 1
+}
+
+### 4. Error: Email duplicado
+POST {{baseUrl}}/auth/register
+Content-Type: {{contentType}}
+
+{
+  "email": "juan@example.com",
+  "telefono": "3119999999",
+  "password": "OtraPass",
+  "id_rol": 3
+}
+
+### 5. Error: Rol inexistente
+POST {{baseUrl}}/auth/register
+Content-Type: {{contentType}}
+
+{
+  "email": "usuario_nuevo@example.com",
+  "telefono": "3112222222",
+  "password": "ValidPassword123",
+  "id_rol": 999
+}
+
+### 6. Login exitoso - Usuario
+POST {{baseUrl}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "juan@example.com",
+  "password": "MiContraseña123"
+}
+
+### 7. Login exitoso - Operador
+POST {{baseUrl}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "operador@example.com",
+  "password": "OperadorPass456"
+}
+
+### 8. Login exitoso - Admin
+POST {{baseUrl}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "admin@example.com",
+  "password": "AdminPass789"
+}
+
+### 9. Error: Contraseña incorrecta
+POST {{baseUrl}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "juan@example.com",
+  "password": "ContraseñaIncorrecta"
+}
+
+### 10. Error: Usuario no existe
+POST {{baseUrl}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "noexiste@example.com",
+  "password": "MiContraseña123"
+}
+
+### 11. Obtener datos del usuario autenticado
+### Copia el token del login anterior en la siguiente línea
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+GET {{baseUrl}}/auth/me
+Authorization: Bearer {{token}}
+
+### 12. Error: Sin token
+GET {{baseUrl}}/auth/me
+
+### 13. Error: Token inválido
+GET {{baseUrl}}/auth/me
+Authorization: Bearer token_invalido_xyz
+
+### 14. Error: Token expirado (espera que expire)
+GET {{baseUrl}}/auth/me
+Authorization: Bearer {{token}}
+
+
+### ==================== DOCUMENTACIÓN ====================
+
+### Swagger UI - Prueba interactiva de la API
+GET {{baseUrl}}/docs
+
+### ReDoc - Documentación alternativa
+GET {{baseUrl}}/redoc
