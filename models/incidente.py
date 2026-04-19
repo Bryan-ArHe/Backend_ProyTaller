@@ -1,9 +1,9 @@
 """
-models/incidente.py - Modelos para Incidentes y Evidencia Multimedia
-Sistema de reporte de emergencias vehiculares con captura de evidencia
+models/incidente.py - Modelos para Incidentes, Evidencia y análisis con IA
+Sistema de reporte de emergencias vehiculares con captura de evidencia y triaje automático
 """
 
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, Text, Enum
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, Text, Enum, Numeric
 from sqlalchemy.orm import relationship
 from models.database import Base
 from datetime import datetime
@@ -30,10 +30,9 @@ class PrioridadIncidente(str, enum.Enum):
 
 class TipoEvidencia(str, enum.Enum):
     """Tipos de evidencia multimedia soportados"""
-    FOTO = "FOTO"
-    VIDEO = "VIDEO"
     AUDIO = "AUDIO"
-    DOCUMENTO = "DOCUMENTO"
+    FOTOGRAFIA = "FOTOGRAFIA"
+    TEXTO = "TEXTO"
 
 
 class Incidente(Base):
@@ -42,72 +41,154 @@ class Incidente(Base):
     
     Atributos:
         id: Identificador único del incidente
+        id_cliente: Clave foránea al cliente que reporta
         id_vehiculo: Clave foránea al vehículo involucrado
-        id_cliente: Clave foránea al usuario who reported (cliente)
-        descripcion: Descripción detallada del incidente
-        estado: Estado actual del incidente
-        prioridad: Prioridad asignada por el sistema de IA (BAJA, MEDIA, ALTA, CRITICA)
-        ubicacion_lat: Latitud de la ubicación del incidente
-        ubicacion_long: Longitud de la ubicación del incidente
-        fecha_reporte: Fecha y hora del reporte
-        fecha_actualizacion: Última fecha de actualización
+        fecha_incidente: Fecha y hora del incidente
+        latitud: Coordenada de latitud GPS
+        longitud: Coordenada de longitud GPS
+        estado_incidente: Estado actual del incidente
     """
-    __tablename__ = "incidentes"
+    __tablename__ = "INCIDENTE"
     
-    id = Column(Integer, primary_key=True, index=True)
-    id_vehiculo = Column(Integer, ForeignKey("vehiculos.id"), nullable=False, index=True)
-    id_cliente = Column(Integer, ForeignKey("usuarios.id"), nullable=False, index=True)
+    id_incidente = Column(Integer, primary_key=True, index=True)
+    id_cliente = Column(Integer, ForeignKey("CLIENTE.id_cliente"), nullable=True, index=True)
+    id_vehiculo = Column(Integer, ForeignKey("VEHICULO.id_vehiculo"), nullable=True, index=True)
     
-    descripcion = Column(Text, nullable=False)
-    estado = Column(Enum(EstadoIncidente), default=EstadoIncidente.PENDIENTE, nullable=False)
-    prioridad = Column(Enum(PrioridadIncidente), default=PrioridadIncidente.MEDIA, nullable=False)
-    
-    # Ubicación del incidente (GPS)
-    ubicacion_lat = Column(Float, nullable=True)
-    ubicacion_long = Column(Float, nullable=True)
-    
-    fecha_reporte = Column(DateTime, default=datetime.utcnow, nullable=False)
-    fecha_actualizacion = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    fecha_incidente = Column(DateTime, default=datetime.utcnow, nullable=False)
+    latitud = Column(Numeric(10, 7), nullable=False)
+    longitud = Column(Numeric(10, 7), nullable=False)
+    estado_incidente = Column(String(30), default="PENDIENTE", nullable=False)
     
     # Relaciones
+    cliente = relationship("Cliente", back_populates="incidentes")
     vehiculo = relationship("Vehiculo", back_populates="incidentes")
-    cliente = relationship("Usuario", back_populates="incidentes")
     evidencias = relationship("Evidencia", back_populates="incidente", cascade="all, delete-orphan")
+    triaje = relationship("TriajeIA", back_populates="incidente", uselist=False, cascade="all, delete-orphan")
+    historial = relationship("HistorialIncidente", back_populates="incidente", cascade="all, delete-orphan")
+    solicitud_servicio = relationship("SolicitudServicio", back_populates="incidente", uselist=False)
+    asignaciones_candidato = relationship("AsignacionCandidato", back_populates="incidente", cascade="all, delete-orphan")
+
     
     def __repr__(self):
-        return f"<Incidente(id={self.id}, vehiculo_id={self.id_vehiculo}, prioridad={self.prioridad}, estado={self.estado})>"
+        return f"<Incidente(id={self.id}, estado={self.estado_incidente}, latitud={self.latitud}, longitud={self.longitud})>"
 
 
 class Evidencia(Base):
     """
     Modelo Evidencia - Archivos multimedia asociados a un incidente
-    Soporta fotos, videos, audios y documentos
+    Soporta audio, fotografías y texto
     
     Atributos:
         id: Identificador único de la evidencia
         id_incidente: Clave foránea al incidente
-        tipo: Tipo de archivo (FOTO, VIDEO, AUDIO, DOCUMENTO)
-        url: URL del archivo almacenado (ej: en S3, storage local, etc.)
-        tamano_bytes: Tamaño del archivo en bytes
-        descripcion: Descripción opcional de la evidencia
-        fecha_captura: Fecha y hora de la captura
-        fecha_registro: Fecha de registro en el sistema
+        tipo: Tipo de archivo (AUDIO, FOTOGRAFIA, TEXTO)
+        url_archivo: URL del archivo almacenado
+        tamano_mb: Tamaño del archivo en megabytes
+        fecha_captura: Fecha de captura original
     """
-    __tablename__ = "evidencias"
+    __tablename__ = "EVIDENCIA"
     
-    id = Column(Integer, primary_key=True, index=True)
-    id_incidente = Column(Integer, ForeignKey("incidentes.id"), nullable=False, index=True)
+    id_evidencia = Column(Integer, primary_key=True, index=True)
+    id_incidente = Column(Integer, ForeignKey("INCIDENTE.id_incidente", ondelete="CASCADE"), nullable=False, index=True)
     
-    tipo = Column(Enum(TipoEvidencia), nullable=False)
-    url = Column(String(500), nullable=False)
-    tamano_bytes = Column(Integer, nullable=True)
-    descripcion = Column(String(300), nullable=True)
+    tipo = Column(String(20), nullable=False)  # AUDIO, FOTOGRAFIA, TEXTO
+    url_archivo = Column(String(400), nullable=False)
+    tamano_mb = Column(Numeric(8, 2), nullable=True)
     
     fecha_captura = Column(DateTime, default=datetime.utcnow, nullable=False)
-    fecha_registro = Column(DateTime, default=datetime.utcnow, nullable=False)
     
     # Relaciones
     incidente = relationship("Incidente", back_populates="evidencias")
     
     def __repr__(self):
         return f"<Evidencia(id={self.id}, id_incidente={self.id_incidente}, tipo={self.tipo})>"
+
+
+class TriajeIA(Base):
+    """
+    Modelo TriajeIA - Análisis automático de incidentes por IA
+    Contiene transcripción, análisis visual, categorización y prioridad
+    
+    Atributos:
+        id: Identificador único del triaje
+        id_incidente: Clave foránea única al incidente
+        transcripcion_audio: Transcripción automática del audio
+        analisis_visual: Análisis de imágenes enviadas
+        categoria_sugerida: Categoría del problema sugerida
+        nivel_prioridad: Nivel de prioridad (1-5)
+        nivel_confianza: Confianza de la IA en el análisis (0-1)
+    """
+    __tablename__ = "TRIAJE_IA"
+    
+    id_triaje = Column(Integer, primary_key=True, index=True)
+    id_incidente = Column(Integer, ForeignKey("INCIDENTE.id_incidente", ondelete="CASCADE"), unique=True, nullable=False)
+    
+    transcripcion_audio = Column(String(2000), nullable=True)
+    analisis_visual = Column(String(2000), nullable=True)
+    categoria_sugerida = Column(String(80), nullable=True)
+    nivel_prioridad = Column(Integer, nullable=True)
+    nivel_confianza = Column(Numeric(5, 4), nullable=True)
+    
+    fecha_analisis = Column(DateTime, default=datetime.utcnow, nullable=False)
+    
+    # Relaciones
+    incidente = relationship("Incidente", back_populates="triaje")
+    
+    def __repr__(self):
+        return f"<TriajeIA(id={self.id}, incidente_id={self.id_incidente}, prioridad={self.nivel_prioridad})>"
+
+
+class HistorialIncidente(Base):
+    """
+    Modelo HistorialIncidente - Registro de cambios de estado del incidente
+    Auditoría de todos los cambios realizados
+    
+    Atributos:
+        id: Identificador único del registro
+        id_incidente: Clave foránea al incidente
+        estado_anterior: Estado previo
+        estado_actual: Estado nuevo
+        fecha_cambio: Fecha del cambio
+    """
+    __tablename__ = "HISTORIAL_INCIDENTE"
+    
+    id_historial = Column(Integer, primary_key=True, index=True)
+    id_incidente = Column(Integer, ForeignKey("INCIDENTE.id_incidente", ondelete="CASCADE"), nullable=False, index=True)
+    
+    estado_anterior = Column(String(30), nullable=True)
+    estado_actual = Column(String(30), nullable=False)
+    fecha_cambio = Column(DateTime, default=datetime.utcnow, nullable=False)
+    
+    # Relaciones
+    incidente = relationship("Incidente", back_populates="historial")
+    
+    def __repr__(self):
+        return f"<HistorialIncidente(id={self.id}, incidente_id={self.id_incidente}, {self.estado_anterior}->{self.estado_actual})>"
+
+
+class MensajeInApp(Base):
+    """
+    Modelo MensajeInApp - Comunicación entre cliente y técnico
+    Chat seguro dentro de la aplicación durante la solicitud de servicio
+    
+    Atributos:
+        id: Identificador único del mensaje
+        id_solicitud: Clave foránea a la solicitud de servicio
+        emisor: Quién envía el mensaje (CLIENTE, TECNICO)
+        contenido: Contenido del mensaje
+        fecha_envio: Fecha y hora de envío
+    """
+    __tablename__ = "MENSAJE_INAPP"
+    
+    id_mensaje = Column(Integer, primary_key=True, index=True)
+    id_solicitud = Column(Integer, ForeignKey("SOLICITUD_SERVICIO.id_solicitud", ondelete="CASCADE"), nullable=False, index=True)
+    
+    emisor = Column(String(30), nullable=False)  # CLIENTE, TECNICO
+    contenido = Column(String(2000), nullable=False)
+    fecha_envio = Column(DateTime, default=datetime.utcnow, nullable=False)
+    
+    # Relaciones
+    solicitud_servicio = relationship("SolicitudServicio", back_populates="mensajes")
+    
+    def __repr__(self):
+        return f"<MensajeInApp(id={self.id}, emisor={self.emisor}, fecha={self.fecha_envio})>"

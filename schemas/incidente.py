@@ -1,28 +1,38 @@
 """
-schemas/incidente.py - Esquemas Pydantic para CRUD de Incidentes
+schemas/incidente.py - Esquemas con Dataclasses para CRUD de Incidentes
 Validación y serialización para Incidentes y Evidencia Multimedia
 """
 
-from pydantic import BaseModel, Field
+from dataclasses import dataclass, field
 from typing import Optional, List
 from datetime import datetime
+from .validators import validate_string_length, validate_latitude, validate_longitude
 
 
 # ============================================================================
 # ESQUEMAS PARA EVIDENCIA
 # ============================================================================
 
-class EvidenciaCreate(BaseModel):
+@dataclass
+class EvidenciaCreate:
     """Esquema para capturar una evidencia en el reporte de incidente"""
-    tipo: str = Field(..., description="Tipo: FOTO, VIDEO, AUDIO, DOCUMENTO")
-    url: str = Field(..., min_length=5, max_length=500, description="URL del archivo")
-    tamano_bytes: Optional[int] = Field(None, ge=1, description="Tamaño en bytes")
-    descripcion: Optional[str] = Field(None, max_length=300, description="Descripción opcional")
+    tipo: str
+    url: str
+    tamano_bytes: Optional[int] = None
+    descripcion: Optional[str] = None
+    
+    def __post_init__(self):
+        validate_string_length(self.url, min_length=5, max_length=500, field_name="url")
+        if self.descripcion:
+            validate_string_length(self.descripcion, max_length=300, field_name="descripcion")
+        if self.tamano_bytes is not None and self.tamano_bytes < 1:
+            raise ValueError("tamano_bytes debe ser mayor a 0")
 
 
-class EvidenciaResponse(BaseModel):
+@dataclass
+class EvidenciaResponse:
     """Esquema de respuesta para Evidencia"""
-    id: int
+    id_evidencia: int
     id_incidente: int
     tipo: str
     url: str
@@ -30,40 +40,36 @@ class EvidenciaResponse(BaseModel):
     descripcion: Optional[str]
     fecha_captura: datetime
     fecha_registro: datetime
-    
-    class Config:
-        from_attributes = True
 
 
 # ============================================================================
 # ESQUEMAS PARA INCIDENTE
 # ============================================================================
 
-class IncidenteCreate(BaseModel):
+@dataclass
+class IncidenteCreate:
     """
     Esquema para reporte inicial de incidente
     Incluye datos del incidente y lista de evidencias
     """
-    id_vehiculo: int = Field(..., description="ID del vehículo involucrado")
-    descripcion: str = Field(
-        ..., 
-        min_length=10, 
-        max_length=1000, 
-        description="Descripción detallada del incidente"
-    )
-    ubicacion_lat: Optional[float] = Field(None, ge=-90, le=90, description="Latitud del incidente")
-    ubicacion_long: Optional[float] = Field(None, ge=-180, le=180, description="Longitud del incidente")
+    id_vehiculo: int
+    descripcion: str
+    ubicacion_lat: Optional[float] = None
+    ubicacion_long: Optional[float] = None
+    evidencias: List[EvidenciaCreate] = field(default_factory=list)
     
-    # Lista de evidencias capturadas
-    evidencias: List[EvidenciaCreate] = Field(
-        default=[],
-        description="Lista de evidencias (fotos, videos, etc.)"
-    )
+    def __post_init__(self):
+        validate_string_length(self.descripcion, min_length=10, max_length=1000, field_name="descripcion")
+        if self.ubicacion_lat:
+            validate_latitude(self.ubicacion_lat)
+        if self.ubicacion_long:
+            validate_longitude(self.ubicacion_long)
 
 
-class IncidenteResponse(BaseModel):
+@dataclass
+class IncidenteResponse:
     """Esquema de respuesta para Incidente"""
-    id: int
+    id_incidente: int
     id_vehiculo: int
     id_cliente: int
     descripcion: str
@@ -73,11 +79,9 @@ class IncidenteResponse(BaseModel):
     ubicacion_long: Optional[float]
     fecha_reporte: datetime
     fecha_actualizacion: datetime
-    
-    class Config:
-        from_attributes = True
 
 
+@dataclass
 class IncidenteDetailedResponse(IncidenteResponse):
     """
     Incidente con información completa incluyendo:
@@ -85,24 +89,23 @@ class IncidenteDetailedResponse(IncidenteResponse):
     - Información del cliente
     - Lista completa de evidencias
     """
-    evidencias: List[EvidenciaResponse] = []
+    evidencias: List[EvidenciaResponse] = field(default_factory=list)
 
 
-class IncidenteListResponse(BaseModel):
+@dataclass
+class IncidenteListResponse:
     """Respuesta para lista de incidentes del usuario"""
-    total: int = Field(description="Total de incidentes")
-    incidentes: List[IncidenteDetailedResponse] = Field(description="Lista de incidentes")
+    total: int
+    incidentes: List[IncidenteDetailedResponse] = field(default_factory=list)
 
 
-class TriajeAIResponse(BaseModel):
+@dataclass
+class TriajeAIResponse:
     """
     Respuesta del sistema de Triaje IA
     (Placeholder para lógica futura de priorización automática)
     """
     id_incidente: int
-    prioridad_asignada: str = Field(description="BAJA, MEDIA, ALTA, CRITICA")
-    razon_prioridad: str = Field(description="Explicación breve de la prioridad asignada")
-    tiempo_respuesta_estimado_minutos: int = Field(description="Tiempo estimado para atención")
-    
-    class Config:
-        from_attributes = True
+    prioridad_asignada: str
+    razon_prioridad: str
+    tiempo_respuesta_estimado_minutos: int

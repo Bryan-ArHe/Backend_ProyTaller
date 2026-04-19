@@ -11,10 +11,14 @@ from routers import auth, dashboard, vehiculos, incidentes
 
 # Importar todos los modelos para que SQLAlchemy los reconozca en metadata
 # IMPORTANTE: Estos imports son necesarios para que Base.metadata.create_all() funcione
-from models.user import Usuario, Rol
+from models.user import Usuario, Rol, Permiso, Cliente, GestorTaller, Tecnico, NotificacionPush
 from models.marca_modelo import Marca, Modelo
 from models.vehiculo import Vehiculo
-from models.incidente import Incidente, Evidencia
+from models.incidente import Incidente, Evidencia, TriajeIA, HistorialIncidente, MensajeInApp
+from models.despacho import (
+    SolicitudServicio, AsignacionCandidato, Repuesto, DetalleServicio,
+    UbicacionTracking, Pago, Comision, Calificacion
+)
 
 # Obtener configuración
 settings = get_settings()
@@ -26,28 +30,20 @@ app = FastAPI(
     description="Backend para la Plataforma Inteligente de Atención de Emergencias Vehiculares",
 )
 
-# Configurar CORS (Control de acceso desde otros orígenes)
-# Permite que el frontend en Angular (localhost:4200) acceda a la API
-# En DESARROLLO: permitir todos los orígenes (*)
-# En PRODUCCIÓN: especificar solo los dominios permitidos
+# Configurar CORS ANTES de cualquier otro middleware
 app.add_middleware(
     CORSMiddleware,
-    # Orígenes permitidos:
-    # - localhost:4200 para desarrollo Angular
-    # - localhost:3000 para otros frameworks (React, Vue, etc.)
-    # - En producción, agregar dominios reales
     allow_origins=[
-        "http://localhost:4200",      # Angular (desarrollo)
-        "http://localhost:3000",      # Otros frameworks (desarrollo)
-        "http://127.0.0.1:4200",      # Angular (IP local)
-        "http://127.0.0.1:3000",      # Otros frameworks (IP local)
-        "*"  # TEMPORAL: En producción cambiar a dominios específicos
+        "http://localhost:4200",
+        "http://127.0.0.1:4200",
+        "http://localhost:3000",
+        "https://api.tudominio.com",
+        "http://localhost:8000",  # Para desarrollo local
+        "http://localhost:8001",
+        "*",  # Permitir todos los orígenes en desarrollo
     ],
-    # Permitir credenciales (cookies, Authorization headers)
     allow_credentials=True,
-    # Métodos HTTP permitidos
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    # Headers permitidos (incluyendo Authorization para JWT)
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
     allow_headers=[
         "Content-Type",
         "Authorization",
@@ -56,7 +52,7 @@ app.add_middleware(
         "Access-Control-Request-Method",
         "Access-Control-Request-Headers",
     ],
-    # Tiempo de caché para las respuestas preflight (en segundos)
+    expose_headers=["Content-Length", "Content-Range"],
     max_age=3600,
 )
 
@@ -87,20 +83,18 @@ def _create_default_roles():
     
     Roles creados:
     1. admin - Administrador del sistema (acceso completo)
-    2. operador - Operador de emergencias (gestión de incidentes)
-    3. tecnico - Técnico de taller (atención de usuarios)
-    4. cliente - Usuario final (reporte de incidentes)
-    5. gestor_taller - Gestor de taller (admin de recursos)
+    2. tecnico - Técnico de taller (atención de usuarios)
+    3. cliente - Usuario final (reporte de incidentes)
+    4. gestor_taller - Gestor de taller (admin de recursos)
     """
     from models.database import SessionLocal
     from models.user import Rol
     
     db = SessionLocal()
     try:
-        # Definir roles por defecto (orden importante, se usan los IDs en seed-test-users)
+        # Definir roles por defecto
         roles_default = [
             {"nombre": "admin", "descripcion": "Administrador del sistema - Acceso completo"},
-            {"nombre": "operador", "descripcion": "Operador de emergencias - Gestión de incidentes"},
             {"nombre": "tecnico", "descripcion": "Técnico de taller - Atención de usuarios"},
             {"nombre": "cliente", "descripcion": "Cliente/Usuario final - Reporte de incidentes"},
             {"nombre": "gestor_taller", "descripcion": "Gestor de taller - Administración de recursos"},

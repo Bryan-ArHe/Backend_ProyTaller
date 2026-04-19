@@ -10,6 +10,7 @@ from models.database import get_db
 from models.user import Usuario
 from security.jwt_handler import decode_access_token
 from schemas.user import UsuarioResponse
+from schemas.converters import orm_to_dataclass
 
 # Esquema OAuth2 que extrae el token del header "Authorization: Bearer <token>"
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
@@ -66,4 +67,4 @@ async def get_current_user(
             detail="La cuenta del usuario está inactiva"
         )
     
-    return UsuarioResponse.from_orm(usuario)
+    return orm_to_dataclass(usuario, UsuarioResponse)

@@ -5,14 +5,15 @@ Incluye: registro, login y obtención de datos del usuario autenticado
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from dataclasses import dataclass, field
 from models.database import get_db
 from models.user import Usuario, Rol, EstadoCuenta
 from schemas.user import UsuarioCreate, UsuarioResponse, LoginData, Token
+from schemas.converters import orm_to_dataclass
 from security.password import hash_password, verify_password
 from security.jwt_handler import create_access_token
 from dependencies import get_current_user
 from config import get_settings
-from pydantic import BaseModel
 from typing import List
 
 # Crear el router de autenticación
@@ -99,7 +100,7 @@ def register(usuario_data: UsuarioCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(nuevo_usuario)
     
-    return UsuarioResponse.from_orm(nuevo_usuario)
+    return orm_to_dataclass(nuevo_usuario, UsuarioResponse)
 
 
 @router.post("/login", response_model=Token)
@@ -195,7 +196,8 @@ def get_current_user_info(current_user: UsuarioResponse = Depends(get_current_us
 # ESQUEMAS PARA SEED DATA
 # ============================================================================
 
-class UsuarioTestData(BaseModel):
+@dataclass
+class UsuarioTestData:
     """Esquema para datos de usuario de prueba con credenciales"""
     email: str
     password: str
@@ -203,16 +205,14 @@ class UsuarioTestData(BaseModel):
     id_rol: int
     rol_nombre: str
     descripcion: str
-    
-    class Config:
-        from_attributes = True
 
 
-class SeedDataResponse(BaseModel):
+@dataclass
+class SeedDataResponse:
     """Respuesta del endpoint de seed con lista de usuarios creados"""
     mensaje: str
     total_usuarios_creados: int
-    usuarios: List[UsuarioTestData]
+    usuarios: List[UsuarioTestData] = field(default_factory=list)
 
 
 # ============================================================================

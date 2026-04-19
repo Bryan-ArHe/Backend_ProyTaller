@@ -40,10 +40,6 @@ Backend_ProyTaller/
 python -m venv venv
 .\venv\Scripts\Activate.ps1
 
-# En Linux/macOS
-python3 -m venv venv
-source venv/bin/activate
-```
 
 ### 2. Instalar dependencias
 
@@ -62,13 +58,23 @@ SECRET_KEY=tu_clave_secreta_segura_cambiar_en_produccion
 
 **Nota:** Asegúrate de que PostgreSQL esté instalado y corriendo, y que hayas creado la base de datos `emergencias_db`.
 
-### 4. Ejecutar la aplicación
+### 4. Inicializar la base de datos
+
+Antes de la primera ejecución, inicializa la BD con datos de prueba:
 
 ```bash
-python main.py
+python reset_db.py
 ```
 
-O con uvicorn directamente:
+Esto crea las tablas y usuarios de prueba necesarios.
+
+### 5. Ejecutar la aplicación
+
+```bash
+python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+O simplemente:
 
 ```bash
 uvicorn main:app --reload
@@ -120,6 +126,14 @@ Una vez que la aplicación esté corriendo:
 - `POST /auth/login`: Autenticación y generación de JWT
 - `GET /auth/me`: Obtener datos del usuario autenticado
 
+#### 6. **CORS** (Configurado en `main.py`)
+
+Configuracion de CORS mejorada para permitir peticiones desde el frontend Angular:
+- Orígenes permitidos: `localhost:4200`, `127.0.0.1:4200`, `localhost:3000`
+- Métodos permitidos: GET, POST, PUT, DELETE, OPTIONS
+- Headers: Content-Type, Authorization
+- Credenciales: Habilitadas
+
 ## 📝 Ejemplos de Uso
 
 ### 1. Registrar un usuario
@@ -130,7 +144,7 @@ curl -X POST "http://localhost:8000/auth/register" \
   -d '{
     "email": "juan@example.com",
     "telefono": "3001234567",
-    "password": "MiContraseña123",
+    "password": "123456",
     "id_rol": 3
   }'
 ```
@@ -154,12 +168,25 @@ curl -X POST "http://localhost:8000/auth/register" \
 
 ### 2. Iniciar sesión
 
+**Con usuario de prueba:**
+
 ```bash
 curl -X POST "http://localhost:8000/auth/login" \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "juan@example.com",
-    "password": "MiContraseña123"
+    "email": "admin@example.com",
+    "password": "123456"
+  }'
+```
+
+**Con cualquier usuario personalizado:**
+
+```bash
+curl -X POST "http://localhost:8000/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "usuario@example.com",
+    "password": "su_contraseña"
   }'
 ```
 
@@ -195,7 +222,49 @@ curl -X GET "http://localhost:8000/auth/me" \
 }
 ```
 
-## 🛡️ Buenas Prácticas Implementadas
+## � Integración por Plataforma
+
+### Frontend Web (Angular - localhost:4200)
+
+El frontend web está destinado al **Administrador** y **Gestor de Taller** para gestionar la plataforma.
+
+**Credenciales recomendadas:**
+- Admin: `admin@example.com` / `123456`
+- Gestor: `gestor_taller@example.com` / `123456`
+
+**Endpoints clave:**
+- `POST /auth/login` - Autenticación
+- `GET /auth/me` - Obtener perfil del usuario autenticado
+- `GET /dashboard` - Dashboard del gestor/admin
+
+**Headers requeridos:**
+```
+Authorization: Bearer <JWT_TOKEN>
+Content-Type: application/json
+```
+
+### App Móvil (iOS/Android)
+
+La app móvil está destinada al **Cliente** (reportar emergencias) y **Técnico** (atender servicios).
+
+**Credenciales para testing:**
+- Cliente: `cliente@example.com` / `123456`
+- Técnico: `tecnico@example.com` / `123456`
+
+**Endpoints clave:**
+- `POST /auth/login` - Autenticación
+- `GET /auth/me` - Obtener perfil del usuario
+- `POST /incidentes` - Crear nuevo incidente (Cliente)
+- `GET /incidentes/{id}` - Obtener detalles del incidente
+- `PATCH /incidentes/{id}/estado` - Actualizar estado del servicio (Técnico)
+
+**Consideraciones para producción:**
+- Cambiar contraseñas en archivo `.env`
+- Implementar registro de usuarios (CU1)
+- Agregar autenticación con SMS/OTP para clientes
+- Gestionar sesiones de técnicos con validación GPS
+
+## �🛡️ Buenas Prácticas Implementadas
 
 1. **Separación de responsabilidades:** Cada módulo tiene una función específica
 2. **Seguridad:**
@@ -205,14 +274,16 @@ curl -X GET "http://localhost:8000/auth/me" \
    - Nunca se retorna password_hash en respuestas
 
 3. **Validación:**
-   - Esquemas Pydantic para entrada/salida
+   - Esquemas con Dataclasses para entrada/salida
    - Validación de email, teléfono, contraseña
-   - Manejo de excepciones HTTP aproppiadas
+   - Manejo de excepciones HTTP approppiadas
+   - Conversión automática de ORM a Dataclasses incluyendo relaciones
 
 4. **Mantenibilidad:**
    - Código comentado y estructurado
    - Uso de dependencias inyectadas
    - Configuración centralizada
+   - Dataclasses en lugar de Pydantic para mayor control
 
 5. **Escalabilidad:**
    - Estructura lista para agregar más módulos
@@ -245,7 +316,25 @@ DEBUG=True  # Cambiar a False en producción
 - **Passlib + bcrypt** - Hasheo seguro de contraseñas
 - **python-jose** - Manejo de JWT
 
-## 🚨 Próximos Pasos (Módulos Futuros)
+## � Usuarios de Prueba
+
+La BD se inicializa con los siguientes usuarios (ejecutar `python reset_db.py`):
+
+### 🌐 Frontend Web (localhost:4200)
+
+| Email | Rol | Contraseña | Descripción |
+|-------|-----|-----------|-------------|
+| admin@example.com | admin | 123456 | Acceso total a la plataforma |
+| gestor_taller@example.com | gestor_taller | 123456 | Gestión de taller y técnicos |
+
+### 📱 App Móvil (Desarrollo/Testing)
+
+| Email | Rol | Contraseña | Descripción |
+|-------|-----|-----------|-------------|
+| tecnico@example.com | tecnico | 123456 | Técnico operativo en campo |
+| cliente@example.com | cliente | 123456 | Usuario final reportando emergencias |
+
+## �🚨 Próximos Pasos (Módulos Futuros)
 
 - Módulo 2: Gestión de Emergencias
 - Módulo 3: Sistema de Alertas

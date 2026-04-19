@@ -59,8 +59,5 @@ class Modelo(Base):
     # Relación N:1 con Marca
     marca = relationship("Marca", back_populates="modelos")
     
-    # Relación 1:N con Vehículo
-    vehiculos = relationship("Vehiculo", back_populates="modelo", cascade="all, delete-orphan")
-    
     def __repr__(self):
-        return f"<Modelo(id={self.id}, nombre='{self.nombre}', marca='{self.marca.nombre}')>"
+        return f"<Modelo(id={self.id}, nombre='{self.nombre}', marca_id={self.id_marca})>"

@@ -6,6 +6,7 @@ Protegido con autenticación JWT e inyección de dependencias
 
 from fastapi import APIRouter, Depends, status, HTTPException
 from sqlalchemy.orm import Session
+from typing import List
 from models.database import get_db
 from dependencies import get_current_user
 from schemas.user import UsuarioResponse
@@ -190,7 +191,7 @@ def agregar_evidencia_incidente(
     return evidencia
 
 
-@router.get("/{id_incidente}/evidencias", response_model=list[EvidenciaResponse], status_code=200)
+@router.get("/{id_incidente}/evidencias", response_model=List[EvidenciaResponse], status_code=200)
 def obtener_evidencias_del_incidente(
     id_incidente: int,
     current_user: UsuarioResponse = Depends(get_current_user),
@@ -313,7 +314,7 @@ def incidentes_por_prioridad(
     )
 
 
-@router.get("/vehiculo/{id_vehiculo}/historial", response_model=list[IncidenteResponse], status_code=200)
+@router.get("/vehiculo/{id_vehiculo}/historial", response_model=List[IncidenteResponse], status_code=200)
 def historial_incidentes_vehiculo(
     id_vehiculo: int,
     current_user: UsuarioResponse = Depends(get_current_user),

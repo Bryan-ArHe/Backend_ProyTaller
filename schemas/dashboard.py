@@ -1,109 +1,82 @@
 """
-schemas/dashboard.py - Esquemas Pydantic para respuestas del Dashboard
+schemas/dashboard.py - Esquemas con Dataclasses para respuestas del Dashboard
 Define las estructuras de datos que se envían al frontend según el rol del usuario
 """
 
-from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
+from dataclasses import dataclass, field
+from typing import Optional, List, Dict, Any, Union
 from datetime import datetime
 
 
-class MetricaBase(BaseModel):
+@dataclass
+class MetricaBase:
     """Estructura base para una métrica"""
-    titulo: str = Field(..., description="Título de la métrica")
-    valor: Any = Field(..., description="Valor de la métrica")
-    icono: Optional[str] = Field(None, description="Nombre del ícono (ej: 'car', 'alert')")
-    color: Optional[str] = Field(None, description="Color de la métrica (ej: 'success', 'warning')")
+    titulo: str
+    valor: Any
+    icono: Optional[str] = None
+    color: Optional[str] = None
 
 
-class DashboardAdminResponse(BaseModel):
+@dataclass
+class DashboardAdminResponse:
     """Métricas para usuarios con rol ADMIN"""
-    total_usuarios: int = Field(..., description="Total de usuarios registrados")
-    usuarios_activos: int = Field(..., description="Usuarios con cuenta activa")
-    usuarios_inactivos: int = Field(..., description="Usuarios con cuenta inactiva")
-    total_roles: int = Field(..., description="Total de roles disponibles")
-    
-    metricas_adicionales: Optional[Dict[str, Any]] = Field(
-        None, 
-        description="Métricas adicionales personalizadas"
-    )
-
-    class Config:
-        from_attributes = True
+    total_usuarios: int
+    usuarios_activos: int
+    usuarios_inactivos: int
+    total_roles: int
+    metricas_adicionales: Optional[Dict[str, Any]] = None
 
 
-class DashboardOperadorResponse(BaseModel):
+@dataclass
+class DashboardOperadorResponse:
     """Métricas para usuarios con rol OPERADOR"""
-    ordenes_pendientes: int = Field(..., description="Cantidad de órdenes pendientes")
-    ordenes_en_proceso: int = Field(..., description="Cantidad de órdenes en proceso")
-    ordenes_completadas_hoy: int = Field(..., description="Órdenes completadas hoy")
-    tecnicos_disponibles: int = Field(..., description="Técnicos disponibles para asignación")
-    
-    metricas_adicionales: Optional[Dict[str, Any]] = Field(
-        None, 
-        description="Métricas adicionales personalizadas"
-    )
-
-    class Config:
-        from_attributes = True
+    ordenes_pendientes: int
+    ordenes_en_proceso: int
+    ordenes_completadas_hoy: int
+    tecnicos_disponibles: int
+    metricas_adicionales: Optional[Dict[str, Any]] = None
 
 
-class DashboardUsuarioResponse(BaseModel):
+@dataclass
+class DashboardUsuarioResponse:
     """Métricas para usuarios con rol USUARIO (clientes)"""
-    vehiculos_registrados: int = Field(..., description="Total de vehículos registrados")
-    incidentes_activos: int = Field(..., description="Cantidad de incidentes activos")
-    solicitudes_pendientes: int = Field(..., description="Solicitudes pendientes de respuesta")
-    ultimo_incidente: Optional[str] = Field(None, description="Fecha del último incidente")
-    
-    metricas_adicionales: Optional[Dict[str, Any]] = Field(
-        None, 
-        description="Métricas adicionales personalizadas"
-    )
-
-    class Config:
-        from_attributes = True
+    vehiculos_registrados: int
+    incidentes_activos: int
+    solicitudes_pendientes: int
+    ultimo_incidente: Optional[str] = None
+    metricas_adicionales: Optional[Dict[str, Any]] = None
 
 
-class DashboardTecnicoResponse(BaseModel):
+@dataclass
+class DashboardTecnicoResponse:
     """Métricas para usuarios con rol TECNICO"""
-    orden_asignada: bool = Field(..., description="¿Tiene orden de trabajo asignada?")
-    descripcion_orden: Optional[str] = Field(None, description="Descripción de la orden actual")
-    tareas_completadas_hoy: int = Field(..., description="Tareas completadas hoy")
-    calificacion_promedio: float = Field(..., description="Calificación promedio por clientes")
-    
-    metricas_adicionales: Optional[Dict[str, Any]] = Field(
-        None, 
-        description="Métricas adicionales personalizadas"
-    )
-
-    class Config:
-        from_attributes = True
+    orden_asignada: bool
+    tareas_completadas_hoy: int
+    calificacion_promedio: float
+    descripcion_orden: Optional[str] = None
+    metricas_adicionales: Optional[Dict[str, Any]] = None
 
 
-class DashboardGenericoResponse(BaseModel):
+@dataclass
+class DashboardGenericoResponse:
     """Respuesta genérica para roles no específicos o desconocidos"""
-    mensaje: str = Field(..., description="Mensaje para el usuario")
-    rol: str = Field(..., description="Rol del usuario")
-    datos: Optional[Dict[str, Any]] = Field(None, description="Datos genéricos disponibles")
-
-    class Config:
-        from_attributes = True
+    mensaje: str
+    rol: str
+    datos: Optional[Dict[str, Any]] = None
 
 
-class DashboardErrorResponse(BaseModel):
+@dataclass
+class DashboardErrorResponse:
     """Respuesta de error en el dashboard"""
-    detalle: str = Field(..., description="Descripción del error")
-    codigo_error: int = Field(..., description="Código de error")
-
-    class Config:
-        from_attributes = True
+    detalle: str
+    codigo_error: int
 
 
 # Unión de tipos para respuesta flexible
-DashboardResponse = (
-    DashboardAdminResponse | 
-    DashboardOperadorResponse | 
-    DashboardUsuarioResponse | 
-    DashboardTecnicoResponse | 
+DashboardResponse = Union[
+    DashboardAdminResponse,
+    DashboardOperadorResponse,
+    DashboardUsuarioResponse,
+    DashboardTecnicoResponse,
     DashboardGenericoResponse
-)
+]

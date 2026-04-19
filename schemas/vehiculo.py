@@ -1,101 +1,147 @@
 """
-schemas/vehiculo.py - Esquemas Pydantic para CRUD de Vehículos
+schemas/vehiculo.py - Esquemas con Dataclasses para CRUD de Vehículos
 Validación y serialización de datos para Marca, Modelo y Vehículo
 """
 
-from pydantic import BaseModel, Field
+from __future__ import annotations
+from dataclasses import dataclass, field
 from typing import Optional, List
 from datetime import datetime
+from .validators import validate_string_length, validate_year
 
 
 # ============================================================================
 # ESQUEMAS PARA MARCA
 # ============================================================================
 
-class MarcaCreate(BaseModel):
+@dataclass
+class MarcaCreate:
     """Esquema para crear una nueva marca"""
-    nombre: str = Field(..., min_length=3, max_length=100, description="Nombre de la marca")
-    pais_origen: Optional[str] = Field(None, max_length=100, description="País de origen")
+    nombre: str
+    pais_origen: Optional[str] = None
+    
+    def __post_init__(self):
+        validate_string_length(self.nombre, min_length=3, max_length=100, field_name="nombre")
+        if self.pais_origen:
+            validate_string_length(self.pais_origen, max_length=100, field_name="pais_origen")
 
 
-class MarcaResponse(BaseModel):
+@dataclass
+class MarcaResponse:
     """Esquema de respuesta para Marca"""
-    id: int
+    id_marca: int
     nombre: str
     pais_origen: Optional[str]
     fecha_creacion: datetime
-    
-    class Config:
-        from_attributes = True
-
-
-class MarcaWithModelos(MarcaResponse):
-    """Marca con sus modelos asociados"""
-    modelos: List["ModeloResponse"] = []
 
 
 # ============================================================================
 # ESQUEMAS PARA MODELO
 # ============================================================================
 
-class ModeloCreate(BaseModel):
+@dataclass
+class ModeloCreate:
     """Esquema para crear un nuevo modelo"""
-    id_marca: int = Field(..., description="ID de la marca")
-    nombre: str = Field(..., min_length=3, max_length=100, description="Nombre del modelo")
-    año_inicio: Optional[int] = Field(None, ge=1900, le=2100, description="Año de inicio de producción")
-    año_fin: Optional[int] = Field(None, ge=1900, le=2100, description="Año de fin de producción")
+    id_marca: int
+    nombre: str
+    año_inicio: Optional[int] = None
+    año_fin: Optional[int] = None
+    
+    def __post_init__(self):
+        validate_string_length(self.nombre, min_length=3, max_length=100, field_name="nombre")
+        if self.año_inicio:
+            validate_year(self.año_inicio)
+        if self.año_fin:
+            validate_year(self.año_fin)
 
 
-class ModeloUpdate(BaseModel):
+@dataclass
+class ModeloUpdate:
     """Esquema para actualizar un modelo"""
-    nombre: Optional[str] = Field(None, min_length=3, max_length=100)
-    año_inicio: Optional[int] = Field(None, ge=1900, le=2100)
-    año_fin: Optional[int] = Field(None, ge=1900, le=2100)
+    nombre: Optional[str] = None
+    año_inicio: Optional[int] = None
+    año_fin: Optional[int] = None
+    
+    def __post_init__(self):
+        if self.nombre:
+            validate_string_length(self.nombre, min_length=3, max_length=100, field_name="nombre")
+        if self.año_inicio:
+            validate_year(self.año_inicio)
+        if self.año_fin:
+            validate_year(self.año_fin)
 
 
-class ModeloResponse(BaseModel):
+@dataclass
+class ModeloResponse:
     """Esquema de respuesta para Modelo"""
-    id: int
+    id_modelo: int
     id_marca: int
     nombre: str
     año_inicio: Optional[int]
     año_fin: Optional[int]
     fecha_creacion: datetime
-    
-    class Config:
-        from_attributes = True
 
 
+@dataclass
 class ModeloWithMarca(ModeloResponse):
     """Modelo con información de su marca"""
     marca: MarcaResponse
+
+
+# Now we can define MarcaWithModelos after ModeloResponse
+@dataclass
+class MarcaWithModelos(MarcaResponse):
+    """Marca con sus modelos asociados"""
+    modelos: List[ModeloResponse] = field(default_factory=list)
 
 
 # ============================================================================
 # ESQUEMAS PARA VEHÍCULO
 # ============================================================================
 
-class VehiculoCreate(BaseModel):
+@dataclass
+class VehiculoCreate:
     """Esquema para registrar un nuevo vehículo"""
-    id_modelo: int = Field(..., description="ID del modelo del vehículo")
-    placa: str = Field(..., min_length=3, max_length=20, description="Placa del vehículo (ÚNICA)")
-    vin: Optional[str] = Field(None, max_length=50, description="VIN (Número de serie)")
-    color: Optional[str] = Field(None, max_length=30, description="Color del vehículo")
-    año: Optional[int] = Field(None, ge=1900, le=2100, description="Año de fabricación")
+    id_modelo: int
+    placa: str
+    vin: Optional[str] = None
+    color: Optional[str] = None
+    año: Optional[int] = None
+    
+    def __post_init__(self):
+        validate_string_length(self.placa, min_length=3, max_length=20, field_name="placa")
+        if self.vin:
+            validate_string_length(self.vin, max_length=50, field_name="vin")
+        if self.color:
+            validate_string_length(self.color, max_length=30, field_name="color")
+        if self.año:
+            validate_year(self.año)
 
 
-class VehiculoUpdate(BaseModel):
+@dataclass
+class VehiculoUpdate:
     """Esquema para actualizar un vehículo"""
-    placa: Optional[str] = Field(None, min_length=3, max_length=20)
-    vin: Optional[str] = Field(None, max_length=50)
-    color: Optional[str] = Field(None, max_length=30)
-    año: Optional[int] = Field(None, ge=1900, le=2100)
-    estado: Optional[str] = Field(None, description="ACTIVO, INACTIVO, MANTENIMIENTO")
+    placa: Optional[str] = None
+    vin: Optional[str] = None
+    color: Optional[str] = None
+    año: Optional[int] = None
+    estado: Optional[str] = None
+    
+    def __post_init__(self):
+        if self.placa:
+            validate_string_length(self.placa, min_length=3, max_length=20, field_name="placa")
+        if self.vin:
+            validate_string_length(self.vin, max_length=50, field_name="vin")
+        if self.color:
+            validate_string_length(self.color, max_length=30, field_name="color")
+        if self.año:
+            validate_year(self.año)
 
 
-class VehiculoResponse(BaseModel):
+@dataclass
+class VehiculoResponse:
     """Esquema de respuesta para Vehículo"""
-    id: int
+    id_vehiculo: int
     id_cliente: int
     id_modelo: int
     placa: str
@@ -104,17 +150,16 @@ class VehiculoResponse(BaseModel):
     año: Optional[int]
     estado: str
     fecha_registro: datetime
-    
-    class Config:
-        from_attributes = True
 
 
+@dataclass
 class VehiculoDetailedResponse(VehiculoResponse):
     """Vehículo con información completa de marca y modelo"""
     modelo: ModeloWithMarca
 
 
-class VehiculoListResponse(BaseModel):
+@dataclass
+class VehiculoListResponse:
     """Respuesta para lista de vehículos del usuario"""
-    total: int = Field(description="Total de vehículos")
-    vehiculos: List[VehiculoDetailedResponse] = Field(description="Lista de vehículos")
+    total: int
+    vehiculos: List[VehiculoDetailedResponse] = field(default_factory=list)

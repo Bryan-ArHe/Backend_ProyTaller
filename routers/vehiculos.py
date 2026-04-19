@@ -6,6 +6,7 @@ Implementa inyección de dependencias para DB y usuario autenticado
 
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
+from typing import List
 from models.database import get_db
 from dependencies import get_current_user
 from schemas.user import UsuarioResponse
@@ -15,6 +16,7 @@ from schemas.vehiculo import (
     MarcaCreate, MarcaResponse, MarcaWithModelos,
     ModeloCreate, ModeloUpdate, ModeloResponse, ModeloWithMarca
 )
+from schemas.converters import orm_to_dataclass
 from crud.vehiculo import (
     crear_vehiculo, obtener_vehiculo_por_id, obtener_vehiculos_por_cliente,
     actualizar_vehiculo, eliminar_vehiculo,
@@ -34,7 +36,7 @@ router = APIRouter(
 # ENDPOINTS: CATÁLOGO DE MARCAS
 # ============================================================================
 
-@router.get("/marcas", response_model=list[MarcaResponse], status_code=200)
+@router.get("/marcas", response_model=List[MarcaResponse], status_code=200)
 def listar_marcas(
     skip: int = 0,
     limit: int = 100,
@@ -112,7 +114,7 @@ def eliminar_marca_endpoint(
 # ENDPOINTS: CATÁLOGO DE MODELOS
 # ============================================================================
 
-@router.get("/marcas/{id_marca}/modelos", response_model=list[ModeloResponse], status_code=200)
+@router.get("/marcas/{id_marca}/modelos", response_model=List[ModeloResponse], status_code=200)
 def listar_modelos_marca(
     id_marca: int,
     db: Session = Depends(get_db)
@@ -284,7 +286,7 @@ def registrar_vehiculo(
         Vehículo creado con su ID
     """
     vehiculo = crear_vehiculo(db, current_user.id, datos)
-    return VehiculoResponse.from_orm(vehiculo)
+    return orm_to_dataclass(vehiculo, VehiculoResponse)
 
 
 @router.put("/{id_vehiculo}", response_model=VehiculoResponse, status_code=200)
@@ -315,7 +317,7 @@ def actualizar_mi_vehiculo(
         Vehículo actualizado
     """
     vehiculo = actualizar_vehiculo(db, id_vehiculo, current_user.id, datos)
-    return VehiculoResponse.from_orm(vehiculo)
+    return orm_to_dataclass(vehiculo, VehiculoResponse)
 
 
 @router.delete("/{id_vehiculo}", status_code=204)

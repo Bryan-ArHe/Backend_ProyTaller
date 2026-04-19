@@ -3,32 +3,46 @@ config.py - Configuración centralizada de la aplicación
 Carga las variables de entorno y proporciona configuraciones globales
 """
 
-from pydantic_settings import BaseSettings
+import os
+from pathlib import Path
+from dotenv import load_dotenv
 from functools import lru_cache
 
+# Cargar variables de entorno desde .env
+env_path = Path(__file__).parent / ".env"
+load_dotenv(env_path)
 
-class Settings(BaseSettings):
+
+class Settings:
     """Configuración de la aplicación basada en variables de entorno"""
     
-    # Base de datos
-    database_url: str = "postgresql://postgres:123456@localhost:5432/gestiontaller"
-    
-    # JWT
-    secret_key: str = "tu_clave_secreta_super_segura_cambiar_en_produccion"
-    algorithm: str = "HS256"
-    access_token_expire_minutes: int = 30
-    
-    # API
-    api_title: str = "Plataforma Inteligente de Atención de Emergencias Vehiculares"
-    api_version: str = "1.0.0"
-    debug: bool = True
-    
-    # Generación de datos de prueba
-    debug_mode: bool = True  # Habilita endpoint POST /auth/seed-test-users
-    
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
+    def __init__(self):
+        # Base de datos
+        self.database_url = os.getenv(
+            "DATABASE_URL",
+            "postgresql://postgres:123456@localhost:5432/gestiontaller"
+        )
+        
+        # JWT
+        self.secret_key = os.getenv(
+            "SECRET_KEY",
+            "tu_clave_secreta_super_segura_cambiar_en_produccion"
+        )
+        self.algorithm = os.getenv("ALGORITHM", "HS256")
+        self.access_token_expire_minutes = int(
+            os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30")
+        )
+        
+        # API
+        self.api_title = os.getenv(
+            "API_TITLE",
+            "Plataforma Inteligente de Atención de Emergencias Vehiculares"
+        )
+        self.api_version = os.getenv("API_VERSION", "1.0.0")
+        self.debug = os.getenv("DEBUG", "True").lower() == "true"
+        
+        # Generación de datos de prueba
+        self.debug_mode = os.getenv("DEBUG_MODE", "True").lower() == "true"
 
 
 @lru_cache()
