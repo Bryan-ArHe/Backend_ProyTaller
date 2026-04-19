@@ -1,0 +1,347 @@
+### Ejemplo de Peticiones HTTP para VS Code REST Client
+### Instala la extensión "REST Client" (humao.rest-client) para ejecutar estas peticiones directamente
+
+@baseUrl = http://localhost:8000
+@contentType = application/json
+
+### Health Check
+GET {{baseUrl}}/health
+
+
+### ==================== AUTENTICACIÓN ====================
+
+### 0. GENERAR USUARIOS DE PRUEBA (SOLO MODO DEBUG)
+### ⚠️ Solo funciona si DEBUG_MODE=True en .env
+POST {{baseUrl}}/auth/seed-test-users
+
+### Respuesta esperada (copiar credenciales para los siguientes tests):
+### {
+###   "mensaje": "Usuarios de prueba creados exitosamente",
+###   "total_usuarios_creados": 5,
+###   "usuarios": [
+###     {
+###       "email": "admin@example.com",
+###       "password": "TestPassword123!",
+###       "telefono": "3001111111",
+###       "id_rol": 1,
+###       "rol_nombre": "admin",
+###       "descripcion": "Admin del sistema - Acceso completo"
+###     },
+###     ...
+###   ]
+### }
+
+
+### 1. Registrar un nuevo usuario
+POST {{baseUrl}}/auth/register
+Content-Type: {{contentType}}
+
+{
+  "email": "juan@example.com",
+  "telefono": "3001234567",
+  "password": "MiContraseña123",
+  "id_rol": 4
+}
+
+### 2. Registrar usuario adicional (técnico)
+POST {{baseUrl}}/auth/register
+Content-Type: {{contentType}}
+
+{
+  "email": "tecnico2@example.com",
+  "telefono": "3109876543",
+  "password": "TecnicoPass456",
+  "id_rol": 3
+}
+
+### 3. Registrar usuario admin
+POST {{baseUrl}}/auth/register
+Content-Type: {{contentType}}
+
+{
+  "email": "admin2@example.com",
+  "telefono": "3111111111",
+  "password": "AdminPass789",
+  "id_rol": 1
+}
+
+### 4. Error: Email duplicado
+POST {{baseUrl}}/auth/register
+Content-Type: {{contentType}}
+
+{
+  "email": "juan@example.com",
+  "telefono": "3119999999",
+  "password": "OtraPass",
+  "id_rol": 4
+}
+
+### 5. Error: Rol inexistente
+POST {{baseUrl}}/auth/register
+Content-Type: {{contentType}}
+
+{
+  "email": "usuario_nuevo@example.com",
+  "telefono": "3112222222",
+  "password": "ValidPassword123",
+  "id_rol": 999
+}
+
+### 6. Login exitoso - Cliente
+POST {{baseUrl}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "juan@example.com",
+  "password": "MiContraseña123"
+}
+
+### 7. Login exitoso - Técnico
+POST {{baseUrl}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "tecnico@example.com",
+  "password": "TestPassword123!"
+}
+
+### 8. Login exitoso - Admin
+POST {{baseUrl}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "admin@example.com",
+  "password": "TestPassword123!"
+}
+
+### 9. Error: Contraseña incorrecta
+POST {{baseUrl}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "juan@example.com",
+  "password": "ContraseñaIncorrecta"
+}
+
+### 10. Error: Usuario no existe
+POST {{baseUrl}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "noexiste@example.com",
+  "password": "MiContraseña123"
+}
+
+### 11. Obtener datos del usuario autenticado
+### Copia el token del login anterior en la siguiente línea
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+GET {{baseUrl}}/auth/me
+Authorization: Bearer {{token}}
+
+### 12. Error: Sin token
+GET {{baseUrl}}/auth/me
+
+### 13. Error: Token inválido
+GET {{baseUrl}}/auth/me
+Authorization: Bearer token_invalido_xyz
+
+### 14. Error: Token expirado (espera que expire)
+GET {{baseUrl}}/auth/me
+Authorization: Bearer {{token}}
+
+
+### ==================== DOCUMENTACIÓN ====================
+
+### Swagger UI - Prueba interactiva de la API
+GET {{baseUrl}}/docs
+
+### ReDoc - Documentación alternativa
+GET {{baseUrl}}/redoc
+
+
+### ==================== GESTIÓN DE VEHÍCULOS ====================
+
+### 1. Listar todas las marcas disponibles
+GET {{baseUrl}}/vehiculos/marcas
+Authorization: Bearer {{token}}
+
+
+### 2. Crear una nueva marca (requiere admin)
+POST {{baseUrl}}/vehiculos/marcas
+Content-Type: {{contentType}}
+Authorization: Bearer {{token}}
+
+{
+  "nombre": "Toyota",
+  "pais_origen": "Japón"
+}
+
+
+### 3. Obtener detalles de una marca (con modelos)
+GET {{baseUrl}}/vehiculos/marcas/1
+Authorization: Bearer {{token}}
+
+
+### 4. Crear modelo para una marca
+POST {{baseUrl}}/vehiculos/modelos
+Content-Type: {{contentType}}
+Authorization: Bearer {{token}}
+
+{
+  "id_marca": 1,
+  "nombre": "Corolla",
+  "año_inicio": 1966,
+  "año_fin": null
+}
+
+
+### 5. Listar modelos de una marca
+GET {{baseUrl}}/vehiculos/marcas/1/modelos
+Authorization: Bearer {{token}}
+
+
+### 6. Registrar nuevo vehículo (usuario autenticado)
+POST {{baseUrl}}/vehiculos
+Content-Type: {{contentType}}
+Authorization: Bearer {{token}}
+
+{
+  "id_modelo": 1,
+  "placa": "ABC-1234",
+  "vin": "12345678901234567",
+  "color": "Rojo",
+  "año": 2022
+}
+
+
+### 7. Listar mis vehículos
+GET {{baseUrl}}/vehiculos
+Authorization: Bearer {{token}}
+
+
+### 8. Obtener detalles de un vehículo específico
+GET {{baseUrl}}/vehiculos/1
+Authorization: Bearer {{token}}
+
+
+### 9. Actualizar un vehículo (propietario)
+PUT {{baseUrl}}/vehiculos/1
+Content-Type: {{contentType}}
+Authorization: Bearer {{token}}
+
+{
+  "color": "Azul",
+  "estado": "MANTENIMIENTO"
+}
+
+
+### 10. Verificar disponibilidad de vehículo
+GET {{baseUrl}}/vehiculos/1/disponibilidad
+Authorization: Bearer {{token}}
+
+
+### 11. Eliminar un vehículo (propietario)
+DELETE {{baseUrl}}/vehiculos/1
+Authorization: Bearer {{token}}
+
+
+### ==================== REPORTE DE INCIDENTES ====================
+
+### 1. Reportar un nuevo incidente/emergencia
+POST {{baseUrl}}/incidentes/reportar
+Content-Type: {{contentType}}
+Authorization: Bearer {{token}}
+
+{
+  "id_vehiculo": 1,
+  "descripcion": "Choque frontal en Cra. 7 con calle 93. Dos vehículos involucrados. Daño significativo en el frente.",
+  "ubicacion_lat": 4.72,
+  "ubicacion_long": -74.01,
+  "evidencias": [
+    {
+      "tipo": "FOTO",
+      "url": "https://storage.example.com/incidente_001_foto1.jpg",
+      "tamano_bytes": 2048576,
+      "descripcion": "Vista frontal del daño"
+    },
+    {
+      "tipo": "VIDEO",
+      "url": "https://storage.example.com/incidente_001_video.mp4",
+      "tamano_bytes": 10485760,
+      "descripcion": "Video del lugar del incidente"
+    }
+  ]
+}
+
+
+### 2. Listar mis incidentes reportados
+GET {{baseUrl}}/incidentes
+Authorization: Bearer {{token}}
+
+
+### 3. Obtener detalles de un incidente específico
+GET {{baseUrl}}/incidentes/1
+Authorization: Bearer {{token}}
+
+
+### 4. Agregar evidencia a un incidente existente
+POST {{baseUrl}}/incidentes/1/evidencias
+Content-Type: {{contentType}}
+Authorization: Bearer {{token}}
+
+{
+  "tipo": "FOTO",
+  "url": "https://storage.example.com/incidente_001_foto_adicional.jpg",
+  "tamano_bytes": 1536000,
+  "descripcion": "Daño lateral del vehículo"
+}
+
+
+### 5. Obtener todas las evidencias de un incidente
+GET {{baseUrl}}/incidentes/1/evidencias
+Authorization: Bearer {{token}}
+
+
+### 6. Eliminar una evidencia
+DELETE {{baseUrl}}/incidentes/1/evidencias/1
+Authorization: Bearer {{token}}
+
+
+### 7. Calcular prioridad de forma previa (preview)
+GET {{baseUrl}}/incidentes/triaje/calcular-prioridad?descripcion=Choque frontal&ubicacion_lat=4.72&ubicacion_long=-74.01
+Authorization: Bearer {{token}}
+
+
+### ==================== FILTROS Y BÚSQUEDA (OPERADORES) ====================
+
+### 1. Incidentes por estado (requiere operador/admin)
+GET {{baseUrl}}/incidentes/filtros/por-estado?estado=PENDIENTE
+Authorization: Bearer {{token}}
+
+
+### 2. Incidentes por prioridad (requiere operador/admin)
+GET {{baseUrl}}/incidentes/filtros/por-prioridad?prioridad=CRITICA
+Authorization: Bearer {{token}}
+
+
+### 3. Historial de incidentes de un vehículo
+GET {{baseUrl}}/incidentes/vehiculo/1/historial
+Authorization: Bearer {{token}}
+
+
+### ==================== OPERACIONES DE TRIAJE (OPERADORES) ====================
+
+### 1. Actualizar estado de un incidente
+PATCH {{baseUrl}}/incidentes/1/estado?nuevo_estado=EN_TRIAJE
+Authorization: Bearer {{token}}
+
+
+### 2. Actualizar prioridad de un incidente
+PATCH {{baseUrl}}/incidentes/1/prioridad?nueva_prioridad=ALTA
+Authorization: Bearer {{token}}
+
+
+### 3. Obtener resumen estadístico (requiere admin)
+GET {{baseUrl}}/incidentes/stats/resumen
+Authorization: Bearer {{token}}
