@@ -147,6 +147,63 @@ def listar_permisos(
     return respuesta
 
 
+@router.get("/{id_rol}/permisos", response_model=List[PermisoResponse])
+def obtener_permisos_rol(
+    id_rol: int,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    GET /roles/{id_rol}/permisos
+    
+    Obtiene todos los permisos asignados a un rol específico.
+    
+    **Protección:** Requiere token JWT válido
+    
+    **Parámetros:**
+        - id_rol (path): ID del rol
+    
+    **Retorna:**
+        - List[PermisoResponse]: Lista de permisos del rol
+    
+    **Estructura de respuesta:**
+        [
+            {
+                "id_permiso": 1,
+                "nombre": "crear_usuario",
+                "descripcion": "Crear nuevo usuario",
+                "recurso": "usuario",
+                "accion": "crear"
+            },
+            ...
+        ]
+    
+    **Errores:**
+        - 401 Unauthorized: Token inválido o expirado
+        - 404 Not Found: Rol no existe
+    """
+    rol = crud_roles.get_rol_by_id(db, id_rol)
+    
+    if not rol:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Rol con ID {id_rol} no encontrado"
+        )
+    
+    respuesta = [
+        PermisoResponse(
+            id_permiso=p.id_permiso,
+            nombre=p.nombre,
+            descripcion=p.descripcion,
+            recurso=p.recurso,
+            accion=p.accion,
+        )
+        for p in rol.permisos
+    ]
+    
+    return respuesta
+
+
 @router.put("/{id_rol}/permisos", response_model=RolConPermisosResponse)
 def actualizar_permisos_rol(
     id_rol: int,

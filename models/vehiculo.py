@@ -27,10 +27,10 @@ class Vehiculo(Base):
         anio: Año de fabricación del vehículo
         fecha_registro: Fecha de registro en el sistema
     """
-    __tablename__ = "VEHICULO"
+    __tablename__ = "vehiculo"
     
     id_vehiculo = Column(Integer, primary_key=True, index=True)
-    id_cliente = Column(Integer, ForeignKey("CLIENTE.id_cliente"), nullable=False, index=True)
+    id_cliente = Column(Integer, ForeignKey("cliente.id_cliente"), nullable=False, index=True)
     
     placa = Column(String(15), unique=True, nullable=False, index=True)
     marca = Column(String(60), nullable=False)

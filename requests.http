@@ -39,7 +39,7 @@ Content-Type: {{contentType}}
 {
   "email": "juan@example.com",
   "telefono": "3001234567",
-  "password": "MiContraseña123",
+  "password": "123456",
   "id_rol": 4
 }
 
@@ -93,7 +93,7 @@ Content-Type: {{contentType}}
 
 {
   "email": "juan@example.com",
-  "password": "MiContraseña123"
+  "password": "123456"
 }
 
 ### 7. Login exitoso - Técnico
@@ -129,7 +129,7 @@ Content-Type: {{contentType}}
 
 {
   "email": "noexiste@example.com",
-  "password": "MiContraseña123"
+  "password": "123456"
 }
 
 ### 11. Obtener datos del usuario autenticado

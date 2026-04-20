@@ -14,10 +14,10 @@ import enum
 
 # Tabla de asociación many-to-many entre Rol y Permiso
 rol_permisos = Table(
-    'ROL_PERMISO',
+    'rol_permiso',
     Base.metadata,
-    Column('id_rol', Integer, ForeignKey('ROL.id_rol'), primary_key=True),
-    Column('id_permiso', Integer, ForeignKey('PERMISO.id_permiso'), primary_key=True)
+    Column('id_rol', Integer, ForeignKey('rol.id_rol'), primary_key=True),
+    Column('id_permiso', Integer, ForeignKey('permiso.id_permiso'), primary_key=True)
 )
 
 
@@ -36,7 +36,7 @@ class Rol(Base):
         nombre: Nombre del rol (ej: "admin", "usuario", "operador")
         descripcion: Descripción detallada del rol
     """
-    __tablename__ = "ROL"
+    __tablename__ = "rol"
     
     id_rol = Column(Integer, primary_key=True, index=True)
     nombre = Column(String(50), unique=True, nullable=False, index=True)
@@ -63,7 +63,7 @@ class Permiso(Base):
         recurso: Recurso sobre el cual actúa el permiso (ej: "incidente", "usuario", "rol")
         accion: Acción permitida (ej: "crear", "leer", "actualizar", "eliminar")
     """
-    __tablename__ = "PERMISO"
+    __tablename__ = "permiso"
     
     id_permiso = Column(Integer, primary_key=True, index=True)
     nombre = Column(String(100), unique=True, nullable=False, index=True)
@@ -91,10 +91,10 @@ class Usuario(Base):
         estado_cuenta: Estado de la cuenta (ACTIVO o INACTIVO)
         fecha_registro: Fecha y hora de registro del usuario
     """
-    __tablename__ = "USUARIO"
+    __tablename__ = "usuario"
     
     id_usuario = Column(Integer, primary_key=True, index=True)
-    id_rol = Column(Integer, ForeignKey("ROL.id_rol"), nullable=False)
+    id_rol = Column(Integer, ForeignKey("rol.id_rol"), nullable=False)
     email = Column(String(100), unique=True, nullable=False, index=True)
     telefono = Column(String(20), unique=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
@@ -124,10 +124,10 @@ class Cliente(Base):
         apellidos: Apellidos del cliente
         ci: Cédula de identidad única
     """
-    __tablename__ = "CLIENTE"
+    __tablename__ = "cliente"
     
     id_cliente = Column(Integer, primary_key=True, index=True)
-    id_usuario = Column(Integer, ForeignKey("USUARIO.id_usuario", ondelete="CASCADE"), unique=True, nullable=False, index=True)
+    id_usuario = Column(Integer, ForeignKey("usuario.id_usuario", ondelete="CASCADE"), unique=True, nullable=False, index=True)
     nombres = Column(String(100), nullable=False)
     apellidos = Column(String(100), nullable=False)
     ci = Column(String(20), unique=True, nullable=False, index=True)
@@ -153,10 +153,10 @@ class GestorTaller(Base):
         nit: NIT único del taller
         direccion: Dirección de ubicación del taller
     """
-    __tablename__ = "GESTOR_TALLER"
+    __tablename__ = "gestores_taller"
     
     id_taller = Column(Integer, primary_key=True, index=True)
-    id_usuario = Column(Integer, ForeignKey("USUARIO.id_usuario", ondelete="CASCADE"), unique=True, nullable=False, index=True)
+    id_usuario = Column(Integer, ForeignKey("usuario.id_usuario", ondelete="CASCADE"), unique=True, nullable=False, index=True)
     razon_social = Column(String(150), nullable=False)
     nit = Column(String(30), unique=True, nullable=False, index=True)
     direccion = Column(String(250), nullable=False)
@@ -185,11 +185,11 @@ class Tecnico(Base):
         especialidad: Especialidad técnica (ej: electricidad, mecánica, etc.)
         esta_disponible: Flag que indica si está disponible para asignaciones
     """
-    __tablename__ = "TECNICO"
+    __tablename__ = "tecnico"
     
     id_tecnico = Column(Integer, primary_key=True, index=True)
-    id_usuario = Column(Integer, ForeignKey("USUARIO.id_usuario", ondelete="CASCADE"), unique=True, nullable=False, index=True)
-    id_taller = Column(Integer, ForeignKey("GESTOR_TALLER.id_taller"), nullable=True, index=True)
+    id_usuario = Column(Integer, ForeignKey("usuario.id_usuario", ondelete="CASCADE"), unique=True, nullable=False, index=True)
+    id_taller = Column(Integer, ForeignKey("gestores_taller.id_taller"), nullable=True, index=True)
     nombres = Column(String(150), nullable=False)
     especialidad = Column(String(100), nullable=True)
     esta_disponible = Column(Integer, default=1, nullable=False)  # 1=True, 0=False para SQL Server
@@ -216,10 +216,10 @@ class NotificacionPush(Base):
         es_leida: Flag que indica si fue leída
         fecha_envio: Fecha y hora del envío
     """
-    __tablename__ = "NOTIFICACION_PUSH"
+    __tablename__ = "notificaciones_push"
     
     id_notificacion = Column(Integer, primary_key=True, index=True)
-    id_usuario = Column(Integer, ForeignKey("USUARIO.id_usuario", ondelete="CASCADE"), nullable=False, index=True)
+    id_usuario = Column(Integer, ForeignKey("usuario.id_usuario", ondelete="CASCADE"), nullable=False, index=True)
     titulo = Column(String(150), nullable=False)
     cuerpo = Column(String(1000), nullable=False)
     es_leida = Column(Integer, default=0, nullable=False)  # 1=True, 0=False para SQL Server

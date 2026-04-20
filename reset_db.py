@@ -1,4 +1,5 @@
-﻿import sys
+﻿# -*- coding: utf-8 -*-
+import sys
 from sqlalchemy import text
 from models.database import SessionLocal, engine, Base
 from models.user import Usuario, Rol, Permiso, EstadoCuenta, Cliente, GestorTaller, Tecnico
@@ -11,8 +12,9 @@ def reset_database():
     print('Eliminando todas las tablas...')
     # Eliminar con CASCADE para quitar tipos ENUM y dependencias
     with engine.connect() as conn:
-        conn.execute(text("DROP TYPE IF EXISTS estadocuenta CASCADE"))
-        conn.commit()
+        pass # Original line modified
+        pass
+        pass
     Base.metadata.drop_all(bind=engine)
     print('Tablas eliminadas')
     print('Creando nuevas tablas...')
@@ -252,6 +254,7 @@ if __name__ == '__main__':
     try:
         reset_database()
         create_test_data()
-        print('✅ Base de datos inicializada correctamente')
+        print('? Base de datos inicializada correctamente')
     except Exception as e:
         print('Error:', e)
+
