@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from config import get_settings
 from models.database import engine, Base
-from routers import auth, dashboard, vehiculos, incidentes
+from routers import auth, dashboard, vehiculos, incidentes, usuarios, roles
 
 # Importar todos los modelos para que SQLAlchemy los reconozca en metadata
 # IMPORTANTE: Estos imports son necesarios para que Base.metadata.create_all() funcione
@@ -131,6 +131,12 @@ def shutdown_event():
 
 # Router de Autenticación - Maneja registro, login, obtener usuario actual
 app.include_router(auth.router)
+
+# Router de Usuarios - Gestión de perfiles y administración de usuarios
+app.include_router(usuarios.router)
+
+# Router de Roles y Permisos - Matriz de administración de roles y permisos
+app.include_router(roles.router)
 
 # Router de Dashboard - Proporciona métricas según el rol del usuario
 app.include_router(dashboard.router)
