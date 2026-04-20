@@ -57,6 +57,8 @@ def register(usuario_data: UsuarioCreate, db: Session = Depends(get_db)):
     Ejemplo de request:
         POST /auth/register
         {
+            "nombre": "Juan",
+            "apellido": "Pérez",
             "email": "juan@example.com",
             "telefono": "3001234567",
             "password": "MiContraseña123",
@@ -76,7 +78,7 @@ def register(usuario_data: UsuarioCreate, db: Session = Depends(get_db)):
         )
     
     # 2. Verificar que el rol exista
-    rol = db.query(Rol).filter(Rol.id == usuario_data.id_rol).first()
+    rol = db.query(Rol).filter(Rol.id_rol == usuario_data.id_rol).first()
     if not rol:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -88,6 +90,8 @@ def register(usuario_data: UsuarioCreate, db: Session = Depends(get_db)):
     
     # 4. Crear el nuevo usuario
     nuevo_usuario = Usuario(
+        nombre=usuario_data.nombre,
+        apellido=usuario_data.apellido,
         email=usuario_data.email,
         telefono=usuario_data.telefono,
         password_hash=password_hash,

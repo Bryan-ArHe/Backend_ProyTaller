@@ -209,27 +209,27 @@ def create_test_data():
         ph = hash_password('123456')
         
         # Usuario Admin
-        admin_user = Usuario(email='admin@example.com', telefono='3001', password_hash=ph, id_rol=admin_rol.id_rol, estado_cuenta=EstadoCuenta.ACTIVO)
+        admin_user = Usuario(nombre='Admin', apellido='System', email='admin@example.com', telefono='3001', password_hash=ph, id_rol=admin_rol.id_rol, estado_cuenta=EstadoCuenta.ACTIVO)
         db.add(admin_user)
         db.flush()
         
         # Usuario Técnico
-        tecnico_user = Usuario(email='tecnico@example.com', telefono='3003', password_hash=ph, id_rol=tecnico_rol.id_rol, estado_cuenta=EstadoCuenta.ACTIVO)
+        tecnico_user = Usuario(nombre='Carlos', apellido='Ruiz', email='tecnico@example.com', telefono='3003', password_hash=ph, id_rol=tecnico_rol.id_rol, estado_cuenta=EstadoCuenta.ACTIVO)
         db.add(tecnico_user)
         db.flush()
         
         # Usuario Cliente
-        cliente_user = Usuario(email='cliente@example.com', telefono='3004', password_hash=ph, id_rol=cliente_rol.id_rol, estado_cuenta=EstadoCuenta.ACTIVO)
+        cliente_user = Usuario(nombre='Juan', apellido='Pérez', email='cliente@example.com', telefono='3004', password_hash=ph, id_rol=cliente_rol.id_rol, estado_cuenta=EstadoCuenta.ACTIVO)
         db.add(cliente_user)
         db.flush()
         
         # Usuario Gestor de Taller
-        gestor_user = Usuario(email='gestor_taller@example.com', telefono='3005', password_hash=ph, id_rol=gestor_rol.id_rol, estado_cuenta=EstadoCuenta.ACTIVO)
+        gestor_user = Usuario(nombre='Roberto', apellido='García', email='gestor_taller@example.com', telefono='3005', password_hash=ph, id_rol=gestor_rol.id_rol, estado_cuenta=EstadoCuenta.ACTIVO)
         db.add(gestor_user)
         db.flush()
         
         # Crear instancias de Cliente, Gestor y Técnico
-        cliente = Cliente(id_usuario=cliente_user.id_usuario, nombres='Juan', apellidos='Pérez', ci='1234567890')
+        cliente = Cliente(id_usuario=cliente_user.id_usuario, ci='1234567890', fecha_nacimiento='1990-05-15')
         db.add(cliente)
         db.flush()
         
@@ -237,7 +237,7 @@ def create_test_data():
         db.add(gestor)
         db.flush()
         
-        tecnico = Tecnico(id_usuario=tecnico_user.id_usuario, id_taller=gestor.id_taller, nombres='Carlos', especialidad='Mecánica', esta_disponible=1)
+        tecnico = Tecnico(id_usuario=tecnico_user.id_usuario, id_taller=gestor.id_taller, nombres='Carlos Ruiz', especialidad='Mecánica', esta_disponible=1)
         db.add(tecnico)
         db.flush()
         

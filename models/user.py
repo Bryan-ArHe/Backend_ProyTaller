@@ -85,6 +85,8 @@ class Usuario(Base):
     Atributos:
         id: Identificador único del usuario
         id_rol: Clave foránea al rol del usuario
+        nombre: Primer nombre del usuario
+        apellido: Apellido del usuario
         email: Email único del usuario
         telefono: Número de teléfono de contacto
         password_hash: Contraseña hasheada con bcrypt (nunca se almacena en texto plano)
@@ -95,6 +97,8 @@ class Usuario(Base):
     
     id_usuario = Column(Integer, primary_key=True, index=True)
     id_rol = Column(Integer, ForeignKey("rol.id_rol"), nullable=False)
+    nombre = Column(String(100), nullable=False)
+    apellido = Column(String(100), nullable=False)
     email = Column(String(100), unique=True, nullable=False, index=True)
     telefono = Column(String(20), unique=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
@@ -120,17 +124,15 @@ class Cliente(Base):
     Atributos:
         id: Identificador único del cliente
         id_usuario: Clave foránea única a Usuario
-        nombres: Nombres del cliente
-        apellidos: Apellidos del cliente
         ci: Cédula de identidad única
+        fecha_nacimiento: Fecha de nacimiento del cliente
     """
     __tablename__ = "cliente"
     
     id_cliente = Column(Integer, primary_key=True, index=True)
     id_usuario = Column(Integer, ForeignKey("usuario.id_usuario", ondelete="CASCADE"), unique=True, nullable=False, index=True)
-    nombres = Column(String(100), nullable=False)
-    apellidos = Column(String(100), nullable=False)
     ci = Column(String(20), unique=True, nullable=False, index=True)
+    fecha_nacimiento = Column(DateTime, nullable=True)
     
     # Relaciones
     usuario = relationship("Usuario", back_populates="cliente")
@@ -138,7 +140,7 @@ class Cliente(Base):
     incidentes = relationship("Incidente", back_populates="cliente", cascade="all, delete-orphan")
     
     def __repr__(self):
-        return f"<Cliente(id={self.id}, nombres='{self.nombres}', ci='{self.ci}')>"
+        return f"<Cliente(id={self.id}, ci='{self.ci}')>"
 
 
 class GestorTaller(Base):

@@ -20,15 +20,19 @@ class RolResponse:
 @dataclass
 class UsuarioCreate:
     """
-    Esquema para la creaciÃ³n de un nuevo usuario.
+    Esquema para la creación de un nuevo usuario.
     Se recibe en el endpoint POST /auth/register
     """
+    nombre: str
+    apellido: str
     email: str
     telefono: str
     password: str
     id_rol: int
     
     def __post_init__(self):
+        validate_string_length(self.nombre, min_length=2, max_length=100, field_name="nombre")
+        validate_string_length(self.apellido, min_length=2, max_length=100, field_name="apellido")
         validate_email(self.email)
         validate_string_length(self.telefono, min_length=7, max_length=20, field_name="telefono")
         validate_string_length(self.password, min_length=8, field_name="password")
@@ -41,6 +45,8 @@ class UsuarioResponse:
     NO incluye password_hash por razones de seguridad.
     """
     id_usuario: int
+    nombre: str
+    apellido: str
     email: str
     telefono: str
     estado_cuenta: str
@@ -119,11 +125,13 @@ class UsuarioRolUpdate:
 @dataclass
 class UsuarioAdminResponse:
     """
-    Esquema detallado para listar usuarios en el panel de administraciÃ³n.
-    Incluye informaciÃ³n completa del usuario y su rol.
+    Esquema detallado para listar usuarios en el panel de administración.
+    Incluye información completa del usuario y su rol.
     Se devuelve en GET /usuarios/
     """
     id_usuario: int
+    nombre: str
+    apellido: str
     email: str
     telefono: str
     estado_cuenta: str
@@ -170,3 +178,42 @@ class ActualizarPermisosRequest:
             raise ValueError("permisos_ids debe ser una lista de enteros")
         if not all(isinstance(pid, int) and pid > 0 for pid in self.permisos_ids):
             raise ValueError("Todos los permisos_ids deben ser enteros positivos")
+
+
+@dataclass
+class ClienteCreate:
+    """
+    Esquema para la creación de un nuevo cliente.
+    Datos adicionales al usuario básico que se almacenan en la tabla cliente.
+    """
+    ci: str
+    fecha_nacimiento: Optional[str] = None
+    
+    def __post_init__(self):
+        validate_string_length(self.ci, min_length=5, max_length=20, field_name="ci")
+
+
+@dataclass
+class ClienteResponse:
+    """
+    Esquema para la respuesta con datos del cliente.
+    Combina información de usuario y datos específicos del cliente.
+    """
+    id_cliente: int
+    ci: str
+    fecha_nacimiento: Optional[datetime] = None
+    usuario: Optional[UsuarioResponse] = None
+
+
+@dataclass
+class ClienteUpdate:
+    """
+    Esquema para actualizar datos del cliente.
+    Permite actualizar cédula y fecha de nacimiento.
+    """
+    ci: Optional[str] = None
+    fecha_nacimiento: Optional[str] = None
+    
+    def __post_init__(self):
+        if self.ci:
+            validate_string_length(self.ci, min_length=5, max_length=20, field_name="ci")
