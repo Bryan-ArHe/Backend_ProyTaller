@@ -82,11 +82,13 @@ def update_current_profile(
     PUT /usuarios/me
     
     Permite que el usuario autenticado actualice su propio perfil.
-    Soporta actualización de teléfono y contraseña (ambos opcionales).
+    Soporta actualización de nombre, apellido, teléfono y contraseña (todos opcionales).
     
     **Protección:** Requiere token JWT válido
     
     **Parámetros de entrada:**
+        - nombre (opcional): Nuevo nombre
+        - apellido (opcional): Nuevo apellido
         - telefono (opcional): Nuevo número de teléfono
         - password (opcional): Nueva contraseña (mínimo 8 caracteres)
     
@@ -106,20 +108,23 @@ def update_current_profile(
         - 403 Forbidden: Cuenta inactiva
         - 404 Not Found: Usuario no encontrado en la BD
     
-    **Ejemplo con solo teléfono:**
+    **Ejemplo actualizar nombre y apellido:**
         PUT /usuarios/me
         Headers: Authorization: Bearer <token>
         Body:
         {
-            "telefono": "3001234567"
+            "nombre": "Bryan",
+            "apellido": "Arauz Herrera"
         }
     
-    **Ejemplo con teléfono y contraseña:**
+    **Ejemplo actualizar todo:**
         PUT /usuarios/me
         Headers: Authorization: Bearer <token>
         Body:
         {
-            "telefono": "3001234567",
+            "nombre": "Bryan",
+            "apellido": "Arauz Herrera",
+            "telefono": "70280131",
             "password": "NuevaContraseña123"
         }
     
@@ -128,6 +133,8 @@ def update_current_profile(
         Headers: Authorization: Bearer <token>
         Body:
         {
+            "nombre": null,
+            "apellido": null,
             "telefono": null,
             "password": null
         }
@@ -299,10 +306,11 @@ def update_user_estado(
     
     # Guardar cambios
     db.commit()
-    db.refresh(usuario)
     
-    # Recargar el rol para la respuesta
-    db.refresh(usuario, attribute_names=['rol'])
+    # Recargar el usuario con su rol cargado con joinedload
+    usuario = db.query(Usuario).options(
+        joinedload(Usuario.rol)
+    ).filter(Usuario.id_usuario == usuario_id).first()
     
     return orm_to_dataclass(usuario, UsuarioAdminResponse)
 
@@ -385,9 +393,10 @@ def update_user_rol(
     
     # Guardar cambios
     db.commit()
-    db.refresh(usuario)
     
-    # Recargar el rol para la respuesta
-    db.refresh(usuario, attribute_names=['rol'])
+    # Recargar el usuario con su rol cargado con joinedload
+    usuario = db.query(Usuario).options(
+        joinedload(Usuario.rol)
+    ).filter(Usuario.id_usuario == usuario_id).first()
     
     return orm_to_dataclass(usuario, UsuarioAdminResponse)

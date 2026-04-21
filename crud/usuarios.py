@@ -77,6 +77,14 @@ def update_usuario(db: Session, usuario_id: int, datos) -> Optional[Usuario]:
     if not usuario:
         return None
     
+    # Actualizar nombre si se proporciona
+    if hasattr(datos, 'nombre') and datos.nombre:
+        usuario.nombre = datos.nombre
+    
+    # Actualizar apellido si se proporciona
+    if hasattr(datos, 'apellido') and datos.apellido:
+        usuario.apellido = datos.apellido
+    
     # Actualizar teléfono si se proporciona
     if hasattr(datos, 'telefono') and datos.telefono:
         usuario.telefono = datos.telefono

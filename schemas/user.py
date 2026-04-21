@@ -6,6 +6,7 @@ Valida automÃ¡ticamente los datos recibidos en las peticiones HTTP
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional, List
+from pydantic import BaseModel, field_validator
 from .validators import validate_string_length, validate_email
 
 
@@ -72,54 +73,81 @@ class LoginData:
 class Token:
     """
     Esquema para la respuesta del token JWT.
-    Se devuelve despuÃ©s del login exitoso.
+    Se devuelve después del login exitoso.
     """
     access_token: str
     token_type: str = "bearer"
 
 
-@dataclass
-class UsuarioUpdate:
+class UsuarioUpdate(BaseModel):
     """
     Esquema para que el usuario actualice su propio perfil.
-    Permite actualizar telÃ©fono y contraseÃ±a (ambos opcionales).
+    Permite actualizar nombre, apellido, teléfono y contraseña (todos opcionales).
     Se recibe en PUT /usuarios/me
     """
+    nombre: Optional[str] = None
+    apellido: Optional[str] = None
     telefono: Optional[str] = None
     password: Optional[str] = None
     
-    def __post_init__(self):
-        if self.telefono:
-            validate_string_length(self.telefono, min_length=7, max_length=20, field_name="telefono")
-        if self.password:
-            validate_string_length(self.password, min_length=8, field_name="password")
+    @field_validator('nombre')
+    @classmethod
+    def validate_nombre(cls, v):
+        if v:
+            validate_string_length(v, min_length=2, max_length=100, field_name="nombre")
+        return v
+    
+    @field_validator('apellido')
+    @classmethod
+    def validate_apellido(cls, v):
+        if v:
+            validate_string_length(v, min_length=2, max_length=100, field_name="apellido")
+        return v
+    
+    @field_validator('telefono')
+    @classmethod
+    def validate_telefono(cls, v):
+        if v:
+            validate_string_length(v, min_length=7, max_length=20, field_name="telefono")
+        return v
+    
+    @field_validator('password')
+    @classmethod
+    def validate_password(cls, v):
+        if v:
+            validate_string_length(v, min_length=8, field_name="password")
+        return v
 
 
-@dataclass
-class UsuarioEstadoUpdate:
+class UsuarioEstadoUpdate(BaseModel):
     """
-    Esquema para que el ADMINISTRADOR cambiÃ© el estado de la cuenta de un usuario.
+    Esquema para que el ADMINISTRADOR cambie el estado de la cuenta de un usuario.
     Solo permite cambiar entre ACTIVO e INACTIVO.
     Se recibe en PATCH /usuarios/{usuario_id}/estado
     """
     estado_cuenta: str
     
-    def __post_init__(self):
-        if self.estado_cuenta not in ["ACTIVO", "INACTIVO"]:
+    @field_validator('estado_cuenta')
+    @classmethod
+    def validate_estado(cls, v):
+        if v not in ["ACTIVO", "INACTIVO"]:
             raise ValueError("estado_cuenta debe ser 'ACTIVO' o 'INACTIVO'")
+        return v
 
 
-@dataclass
-class UsuarioRolUpdate:
+class UsuarioRolUpdate(BaseModel):
     """
     Esquema para que el ADMINISTRADOR cambie el rol de un usuario.
     Se recibe en PATCH /usuarios/{usuario_id}/rol
     """
     id_rol: int
     
-    def __post_init__(self):
-        if self.id_rol < 1:
-            raise ValueError("id_rol debe ser un nÃºmero positivo")
+    @field_validator('id_rol')
+    @classmethod
+    def validate_id_rol(cls, v):
+        if v < 1:
+            raise ValueError("id_rol debe ser un número positivo")
+        return v
 
 
 @dataclass
