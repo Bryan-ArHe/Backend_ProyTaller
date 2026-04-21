@@ -22,11 +22,11 @@ class AsignacionCandidato(Base):
         score_ia: Puntuación algorítmica del candidato
         es_seleccionado: Flag si fue seleccionado
     """
-    __tablename__ = "ASIGNACION_CANDIDATO"
+    __tablename__ = "asignacion_candidato"
     
     id_candidato = Column(Integer, primary_key=True, index=True)
-    id_incidente = Column(Integer, ForeignKey("INCIDENTE.id_incidente", ondelete="CASCADE"), nullable=False, index=True)
-    id_taller = Column(Integer, ForeignKey("GESTOR_TALLER.id_taller"), nullable=False, index=True)
+    id_incidente = Column(Integer, ForeignKey("incidente.id_incidente", ondelete="CASCADE"), nullable=False, index=True)
+    id_taller = Column(Integer, ForeignKey("gestores_taller.id_taller"), nullable=False, index=True)
     
     distancia_estimada_km = Column(Numeric(8, 2), nullable=True)
     score_ia = Column(Numeric(8, 4), nullable=True)
@@ -55,11 +55,11 @@ class SolicitudServicio(Base):
         fecha_llegada_estimada: ETA calculada
         fecha_finalizacion: Fecha de cierre del servicio
     """
-    __tablename__ = "SOLICITUD_SERVICIO"
+    __tablename__ = "solicitud_servicio"
     
     id_solicitud = Column(Integer, primary_key=True, index=True)
-    id_incidente = Column(Integer, ForeignKey("INCIDENTE.id_incidente"), unique=True, nullable=False, index=True)
-    id_tecnico = Column(Integer, ForeignKey("TECNICO.id_tecnico"), nullable=False, index=True)
+    id_incidente = Column(Integer, ForeignKey("incidente.id_incidente"), unique=True, nullable=False, index=True)
+    id_tecnico = Column(Integer, ForeignKey("tecnico.id_tecnico"), nullable=False, index=True)
     
     fecha_asignacion = Column(DateTime, default=datetime.utcnow, nullable=False)
     fecha_llegada_estimada = Column(DateTime, nullable=True)
@@ -88,10 +88,10 @@ class Repuesto(Base):
         cantidad: Cantidad disponible
         precio: Precio unitario
     """
-    __tablename__ = "REPUESTO"
+    __tablename__ = "repuesto"
     
     id_repuesto = Column(Integer, primary_key=True, index=True)
-    id_taller = Column(Integer, ForeignKey("GESTOR_TALLER.id_taller", ondelete="CASCADE"), nullable=False, index=True)
+    id_taller = Column(Integer, ForeignKey("gestores_taller.id_taller", ondelete="CASCADE"), nullable=False, index=True)
     
     nombre = Column(String(150), nullable=False)
     cantidad = Column(Integer, default=0, nullable=False)
@@ -119,11 +119,11 @@ class DetalleServicio(Base):
         cantidad_consumida: Cantidad de unidades consumidas
         subtotal_repuesto: Costo total de este repuesto
     """
-    __tablename__ = "DETALLE_SERVICIO"
+    __tablename__ = "detalle_servicio"
     
     id_detalle = Column(Integer, primary_key=True, index=True)
-    id_solicitud = Column(Integer, ForeignKey("SOLICITUD_SERVICIO.id_solicitud", ondelete="CASCADE"), nullable=False, index=True)
-    id_repuesto = Column(Integer, ForeignKey("REPUESTO.id_repuesto"), nullable=False, index=True)
+    id_solicitud = Column(Integer, ForeignKey("solicitud_servicio.id_solicitud", ondelete="CASCADE"), nullable=False, index=True)
+    id_repuesto = Column(Integer, ForeignKey("repuesto.id_repuesto"), nullable=False, index=True)
     
     cantidad_consumida = Column(Integer, nullable=False)
     subtotal_repuesto = Column(Numeric(12, 2), nullable=False)
@@ -148,10 +148,10 @@ class UbicacionTracking(Base):
         longitud: Coordenada de longitud GPS
         fecha_hora: Timestamp del registro
     """
-    __tablename__ = "UBICACION_TRACKING"
+    __tablename__ = "ubicacion_tracking"
     
     id_tracking = Column(Integer, primary_key=True, index=True)
-    id_tecnico = Column(Integer, ForeignKey("TECNICO.id_tecnico", ondelete="CASCADE"), nullable=False, index=True)
+    id_tecnico = Column(Integer, ForeignKey("tecnico.id_tecnico", ondelete="CASCADE"), nullable=False, index=True)
     
     latitud = Column(Numeric(10, 7), nullable=False)
     longitud = Column(Numeric(10, 7), nullable=False)
@@ -177,10 +177,10 @@ class Pago(Base):
         metodo_pago: Método utilizado (tarjeta, efectivo, QR, etc.)
         estado_transaccion: Estado del pago (PENDIENTE, COMPLETADO, RECHAZADO)
     """
-    __tablename__ = "PAGO"
+    __tablename__ = "pago"
     
     id_pago = Column(Integer, primary_key=True, index=True)
-    id_solicitud = Column(Integer, ForeignKey("SOLICITUD_SERVICIO.id_solicitud", ondelete="CASCADE"), unique=True, nullable=False, index=True)
+    id_solicitud = Column(Integer, ForeignKey("solicitud_servicio.id_solicitud", ondelete="CASCADE"), unique=True, nullable=False, index=True)
     
     monto_subtotal = Column(Numeric(12, 2), nullable=False)
     monto_total = Column(Numeric(12, 2), nullable=False)
@@ -209,10 +209,10 @@ class Comision(Base):
         porcentaje: Porcentaje de comisión
         monto: Monto de la comisión
     """
-    __tablename__ = "COMISION"
+    __tablename__ = "comision"
     
     id_comision = Column(Integer, primary_key=True, index=True)
-    id_pago = Column(Integer, ForeignKey("PAGO.id_pago", ondelete="CASCADE"), unique=True, nullable=False)
+    id_pago = Column(Integer, ForeignKey("pago.id_pago", ondelete="CASCADE"), unique=True, nullable=False)
     
     porcentaje = Column(Numeric(5, 2), nullable=False)
     monto = Column(Numeric(12, 2), nullable=False)
@@ -235,10 +235,10 @@ class Calificacion(Base):
         puntuacion: Puntuación de 1 a 5 estrellas
         resena: Texto de la reseña
     """
-    __tablename__ = "CALIFICACION"
+    __tablename__ = "calificacion"
     
     id_calificacion = Column(Integer, primary_key=True, index=True)
-    id_solicitud = Column(Integer, ForeignKey("SOLICITUD_SERVICIO.id_solicitud", ondelete="CASCADE"), unique=True, nullable=False)
+    id_solicitud = Column(Integer, ForeignKey("solicitud_servicio.id_solicitud", ondelete="CASCADE"), unique=True, nullable=False)
     
     puntuacion = Column(Integer, nullable=False)  # 1-5
     resena = Column(String(1000), nullable=True)

@@ -48,11 +48,11 @@ class Incidente(Base):
         longitud: Coordenada de longitud GPS
         estado_incidente: Estado actual del incidente
     """
-    __tablename__ = "INCIDENTE"
+    __tablename__ = "incidente"
     
     id_incidente = Column(Integer, primary_key=True, index=True)
-    id_cliente = Column(Integer, ForeignKey("CLIENTE.id_cliente"), nullable=True, index=True)
-    id_vehiculo = Column(Integer, ForeignKey("VEHICULO.id_vehiculo"), nullable=True, index=True)
+    id_cliente = Column(Integer, ForeignKey("cliente.id_cliente"), nullable=True, index=True)
+    id_vehiculo = Column(Integer, ForeignKey("vehiculo.id_vehiculo"), nullable=True, index=True)
     
     fecha_incidente = Column(DateTime, default=datetime.utcnow, nullable=False)
     latitud = Column(Numeric(10, 7), nullable=False)
@@ -86,10 +86,10 @@ class Evidencia(Base):
         tamano_mb: Tamaño del archivo en megabytes
         fecha_captura: Fecha de captura original
     """
-    __tablename__ = "EVIDENCIA"
+    __tablename__ = "evidencia"
     
     id_evidencia = Column(Integer, primary_key=True, index=True)
-    id_incidente = Column(Integer, ForeignKey("INCIDENTE.id_incidente", ondelete="CASCADE"), nullable=False, index=True)
+    id_incidente = Column(Integer, ForeignKey("incidente.id_incidente", ondelete="CASCADE"), nullable=False, index=True)
     
     tipo = Column(String(20), nullable=False)  # AUDIO, FOTOGRAFIA, TEXTO
     url_archivo = Column(String(400), nullable=False)
@@ -118,10 +118,10 @@ class TriajeIA(Base):
         nivel_prioridad: Nivel de prioridad (1-5)
         nivel_confianza: Confianza de la IA en el análisis (0-1)
     """
-    __tablename__ = "TRIAJE_IA"
+    __tablename__ = "triaje_ia"
     
     id_triaje = Column(Integer, primary_key=True, index=True)
-    id_incidente = Column(Integer, ForeignKey("INCIDENTE.id_incidente", ondelete="CASCADE"), unique=True, nullable=False)
+    id_incidente = Column(Integer, ForeignKey("incidente.id_incidente", ondelete="CASCADE"), unique=True, nullable=False)
     
     transcripcion_audio = Column(String(2000), nullable=True)
     analisis_visual = Column(String(2000), nullable=True)
@@ -150,10 +150,10 @@ class HistorialIncidente(Base):
         estado_actual: Estado nuevo
         fecha_cambio: Fecha del cambio
     """
-    __tablename__ = "HISTORIAL_INCIDENTE"
+    __tablename__ = "historial_incidente"
     
     id_historial = Column(Integer, primary_key=True, index=True)
-    id_incidente = Column(Integer, ForeignKey("INCIDENTE.id_incidente", ondelete="CASCADE"), nullable=False, index=True)
+    id_incidente = Column(Integer, ForeignKey("incidente.id_incidente", ondelete="CASCADE"), nullable=False, index=True)
     
     estado_anterior = Column(String(30), nullable=True)
     estado_actual = Column(String(30), nullable=False)
@@ -178,10 +178,10 @@ class MensajeInApp(Base):
         contenido: Contenido del mensaje
         fecha_envio: Fecha y hora de envío
     """
-    __tablename__ = "MENSAJE_INAPP"
+    __tablename__ = "mensaje_inapp"
     
     id_mensaje = Column(Integer, primary_key=True, index=True)
-    id_solicitud = Column(Integer, ForeignKey("SOLICITUD_SERVICIO.id_solicitud", ondelete="CASCADE"), nullable=False, index=True)
+    id_solicitud = Column(Integer, ForeignKey("solicitud_servicio.id_solicitud", ondelete="CASCADE"), nullable=False, index=True)
     
     emisor = Column(String(30), nullable=False)  # CLIENTE, TECNICO
     contenido = Column(String(2000), nullable=False)
