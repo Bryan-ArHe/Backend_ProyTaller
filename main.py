@@ -39,7 +39,7 @@ app.add_middleware(
         "https://api.tudominio.com",
         "http://localhost:8000",  # Para desarrollo local
         "http://localhost:8001",
-        "*",  # Permitir todos los orígenes en desarrollo
+        #"*",   Permitir todos los orígenes en desarrollo
     ],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],

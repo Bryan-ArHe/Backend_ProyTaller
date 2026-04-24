@@ -4,17 +4,17 @@ CRUD protegido con autenticación JWT
 Implementa inyección de dependencias para DB y usuario autenticado
 """
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 from models.database import get_db
+from models.user import Cliente
 from dependencies import get_current_user
 from schemas.user import UsuarioResponse
 from schemas.vehiculo import (
     VehiculoCreate, VehiculoUpdate, VehiculoResponse,
-    VehiculoDetailedResponse, VehiculoListResponse,
-    MarcaCreate, MarcaResponse, MarcaWithModelos,
-    ModeloCreate, ModeloUpdate, ModeloResponse, ModeloWithMarca
+    VehiculoDetailedResponse, VehiculoListResponsePydantic,
+    VehiculoResponsePydantic, VehiculoDetailedResponsePydantic
 )
 from schemas.converters import orm_to_dataclass
 from crud.vehiculo import (
@@ -33,7 +33,7 @@ router = APIRouter(
 # ENDPOINTS: VEHÍCULOS DEL USUARIO
 # ============================================================================
 
-@router.get("", response_model=VehiculoListResponse, status_code=200)
+@router.get("", response_model=List[VehiculoResponsePydantic], status_code=200)
 def listar_mis_vehiculos(
     skip: int = 0,
     limit: int = 100,
@@ -50,16 +50,59 @@ def listar_mis_vehiculos(
         limit: Máximo de registros a retornar
     
     Returns:
-        Lista de vehículos del usuario con información completa
+        Array de vehículos del usuario con información completa
     """
-    vehiculos = obtener_vehiculos_por_cliente(db, current_user.id, skip=skip, limit=limit)
-    return VehiculoListResponse(
-        total=len(vehiculos),
-        vehiculos=vehiculos
-    )
+    try:
+        print(f"\n{'='*80}")
+        print(f"📍 GET /vehiculos - Listando vehículos del usuario")
+        print(f"   Usuario ID: {current_user.id_usuario}")
+        
+        # Obtener el Cliente asociado al Usuario autenticado
+        cliente = db.query(Cliente).filter(Cliente.id_usuario == current_user.id_usuario).first()
+        if not cliente:
+            print(f"❌ No se encontró cliente para usuario {current_user.id_usuario}")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="El usuario actual no tiene un perfil de cliente."
+            )
+        
+        print(f"   Cliente ID: {cliente.id_cliente}")
+        
+        vehiculos_orm = obtener_vehiculos_por_cliente(db, cliente.id_cliente, skip=skip, limit=limit)
+        print(f"   Total de vehículos encontrados: {len(vehiculos_orm)}")
+        
+        # Convertir ORM objects a modelos Pydantic (JSON serializable)
+        vehiculos_pydantic = []
+        for idx, v in enumerate(vehiculos_orm):
+            try:
+                v_pydantic = VehiculoResponsePydantic.from_orm(v)
+                vehiculos_pydantic.append(v_pydantic)
+                print(f"   ✅ Vehículo {idx+1} convertido: {v.placa}")
+            except Exception as conv_err:
+                print(f"   ❌ Error convirtiendo vehículo {idx+1}: {str(conv_err)}")
+                raise
+        
+        print(f"   ✅ Retornando {len(vehiculos_pydantic)} vehículos como array")
+        print(f"{'='*80}\n")
+        return vehiculos_pydantic
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"\n{'='*80}")
+        print(f"💥 ERROR EN GET /vehiculos")
+        print(f"   Tipo: {type(e).__name__}")
+        print(f"   Mensaje: {str(e)}")
+        import traceback
+        print(f"   Traceback: {traceback.format_exc()}")
+        print(f"{'='*80}\n")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al cargar vehículos: {str(e)}"
+        )
 
 
-@router.get("/{id_vehiculo}", response_model=VehiculoDetailedResponse, status_code=200)
+@router.get("/{id_vehiculo}", response_model=VehiculoDetailedResponsePydantic, status_code=200)
 def obtener_mi_vehiculo(
     id_vehiculo: int,
     current_user: UsuarioResponse = Depends(get_current_user),
@@ -78,45 +121,62 @@ def obtener_mi_vehiculo(
     """
     vehiculo = obtener_vehiculo_por_id(db, id_vehiculo)
     
+    # Obtener el Cliente asociado al Usuario autenticado
+    cliente = db.query(Cliente).filter(Cliente.id_usuario == current_user.id_usuario).first()
+    if not cliente:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="El usuario actual no tiene un perfil de cliente."
+        )
+    
     # Validar propiedad (RBAC)
-    if vehiculo.id_cliente != current_user.id:
+    if vehiculo.id_cliente != cliente.id_cliente:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No tiene permiso para acceder a este vehículo"
         )
     
-    return vehiculo
+    return VehiculoDetailedResponsePydantic.from_orm(vehiculo)
 
 
-@router.post("", response_model=VehiculoResponse, status_code=201)
+@router.post("", response_model=VehiculoResponsePydantic, status_code=201)
 def registrar_vehiculo(
     datos: VehiculoCreate,
     current_user: UsuarioResponse = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    Registra un nuevo vehículo para el usuario autenticado
+    Registra un nuevo vehículo para el usuario autenticado (cliente)
     
     Validaciones:
         - La placa debe ser única en el sistema
-        - El modelo debe existir
+        - El usuario debe ser un cliente registrado
         - El usuario debe estar activo
     
     Request Body:
-        id_modelo: ID del modelo del vehículo
         placa: Placa de registro (única)
-        vin: VIN/Número de serie (opcional, debe ser único)
+        marca: Marca del vehículo
+        modelo: Modelo del vehículo
+        anio: Año de fabricación (opcional)
         color: Color del vehículo (opcional)
-        año: Año de fabricación (opcional)
     
     Returns:
         Vehículo creado con su ID
     """
-    vehiculo = crear_vehiculo(db, current_user.id, datos)
-    return orm_to_dataclass(vehiculo, VehiculoResponse)
+    # Obtener el registro Cliente asociado al Usuario autenticado
+    cliente = db.query(Cliente).filter(Cliente.id_usuario == current_user.id_usuario).first()
+    if not cliente:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="El usuario actual no tiene un perfil de cliente. Solo clientes pueden registrar vehículos."
+        )
+    
+    # Crear el vehículo con el id_cliente correcto
+    vehiculo = crear_vehiculo(db, cliente.id_cliente, datos)
+    return VehiculoResponsePydantic.from_orm(vehiculo)
 
 
-@router.put("/{id_vehiculo}", response_model=VehiculoResponse, status_code=200)
+@router.put("/{id_vehiculo}", response_model=VehiculoResponsePydantic, status_code=200)
 def actualizar_mi_vehiculo(
     id_vehiculo: int,
     datos: VehiculoUpdate,
@@ -135,16 +195,22 @@ def actualizar_mi_vehiculo(
     
     Request Body:
         placa: Nueva placa (opcional)
-        vin: Nuevo VIN (opcional)
         color: Nuevo color (opcional)
-        año: Nuevo año (opcional)
-        estado: Nuevo estado (opcional)
+        anio: Nuevo año (opcional)
     
     Returns:
         Vehículo actualizado
     """
-    vehiculo = actualizar_vehiculo(db, id_vehiculo, current_user.id, datos)
-    return orm_to_dataclass(vehiculo, VehiculoResponse)
+    # Obtener el Cliente asociado al Usuario autenticado
+    cliente = db.query(Cliente).filter(Cliente.id_usuario == current_user.id_usuario).first()
+    if not cliente:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="El usuario actual no tiene un perfil de cliente."
+        )
+    
+    vehiculo = actualizar_vehiculo(db, id_vehiculo, cliente.id_cliente, datos)
+    return VehiculoResponsePydantic.from_orm(vehiculo)
 
 
 @router.delete("/{id_vehiculo}", status_code=204)
@@ -166,7 +232,15 @@ def eliminar_mi_vehiculo(
     Returns:
         204 No Content si fue exitoso
     """
-    eliminar_vehiculo(db, id_vehiculo, current_user.id)
+    # Obtener el Cliente asociado al Usuario autenticado
+    cliente = db.query(Cliente).filter(Cliente.id_usuario == current_user.id_usuario).first()
+    if not cliente:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="El usuario actual no tiene un perfil de cliente."
+        )
+    
+    eliminar_vehiculo(db, id_vehiculo, cliente.id_cliente)
     return None
 
 
@@ -183,21 +257,28 @@ def verificar_disponibilidad_vehiculo(
     """
     Verifica si un vehículo está disponible y activo
     
-    Useful para validar antes de crear un incidente
+    Útil para validar antes de crear un incidente
     """
     vehiculo = obtener_vehiculo_por_id(db, id_vehiculo)
     
-    if vehiculo.id_cliente != current_user.id:
+    # Obtener el Cliente asociado al Usuario autenticado
+    cliente = db.query(Cliente).filter(Cliente.id_usuario == current_user.id_usuario).first()
+    if not cliente:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="El usuario actual no tiene un perfil de cliente."
+        )
+    
+    if vehiculo.id_cliente != cliente.id_cliente:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No tiene permiso para ver este vehículo"
         )
     
     return {
-        "id_vehiculo": vehiculo.id,
+        "id_vehiculo": vehiculo.id_vehiculo,
         "placa": vehiculo.placa,
-        "estado": vehiculo.estado,
-        "disponible": vehiculo.estado == "ACTIVO"
+        "disponible": True  # Por ahora asumimos que está disponible si existe y pertenece al usuario
     }
 
 
