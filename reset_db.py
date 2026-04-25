@@ -5,6 +5,7 @@ from models.database import SessionLocal, engine, Base
 from models.user import Usuario, Rol, Permiso, EstadoCuenta, Cliente, GestorTaller, Tecnico
 from models.vehiculo import Vehiculo
 from models.incidente import Incidente, Evidencia, TriajeIA, HistorialIncidente, MensajeInApp
+from models.bitacora import Bitacora
 from models.despacho import SolicitudServicio, AsignacionCandidato, Repuesto, DetalleServicio, UbicacionTracking, Pago, Comision, Calificacion
 from security.password import hash_password
 

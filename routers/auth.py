@@ -3,7 +3,7 @@ routers/auth.py - Router con los endpoints de autenticación
 Incluye: registro, login y obtención de datos del usuario autenticado
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from dataclasses import dataclass, field
 from models.database import get_db
@@ -14,6 +14,7 @@ from security.password import hash_password, verify_password
 from security.jwt_handler import create_access_token
 from dependencies import get_current_user
 from config import get_settings
+from utils.bitacora_helper import registrar_evento_bitacora
 from typing import List
 
 # Crear el router de autenticación
@@ -108,7 +109,7 @@ def register(usuario_data: UsuarioCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=Token)
-def login(credenciales: LoginData, db: Session = Depends(get_db)):
+def login(credenciales: LoginData, request: Request, db: Session = Depends(get_db)):
     """
     Endpoint para autenticar un usuario y obtener un token JWT.
     
@@ -117,9 +118,11 @@ def login(credenciales: LoginData, db: Session = Depends(get_db)):
     2. Verifica que la contraseña sea correcta
     3. Verifica que la cuenta esté activa
     4. Genera un token JWT
+    5. Registra el evento en bitácora
     
     Args:
         credenciales: Email y contraseña del usuario (LoginData)
+        request: Objeto Request para obtener IP del cliente
         db: Sesión de base de datos
         
     Returns:
@@ -165,6 +168,17 @@ def login(credenciales: LoginData, db: Session = Depends(get_db)):
     
     # 4. Generar token JWT
     access_token = create_access_token(data={"sub": usuario.email})
+    
+    # 5. Registrar evento en bitácora
+    registrar_evento_bitacora(
+        db=db,
+        request=request,
+        id_usuario=usuario.id_usuario,
+        nombre_usuario=f"{usuario.nombre} {usuario.apellido}",
+        evento="LOGIN",
+        recurso="AUTENTICACION",
+        accion=f"Usuario {usuario.email} inició sesión"
+    )
     
     return {"access_token": access_token, "token_type": "bearer"}
 

@@ -272,7 +272,7 @@ def actualizar_permisos_rol(
     """
     # Obtener el usuario actual de la BD con su rol
     usuario = db.query(Usuario).filter(
-        Usuario.id_usuario == current_user["id_usuario"]
+        Usuario.id_usuario == current_user.id_usuario
     ).first()
     
     if not usuario:

@@ -3,7 +3,7 @@ routers/usuarios.py - Router para gestión de perfiles y administración de usua
 Módulo 1: Identidad y Accesos - Endpoints para CRUD de usuarios y perfiles
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session, joinedload
 from models.database import get_db
 from models.user import Usuario, Rol, EstadoCuenta
@@ -17,6 +17,7 @@ from schemas.user import (
 from schemas.converters import orm_to_dataclass
 from dependencies import get_current_user
 from crud import usuarios as crud_usuarios
+from utils.bitacora_helper import registrar_evento_bitacora
 from typing import List
 
 # Crear el router de usuarios
@@ -75,6 +76,7 @@ def get_current_profile(
 @router.put("/me", response_model=UsuarioResponse)
 def update_current_profile(
     usuario_data: UsuarioUpdate,
+    request: Request,
     current_user: UsuarioResponse = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -98,7 +100,8 @@ def update_current_profile(
         3. Actualiza los campos proporcionados
         4. Si password se proporciona, lo hashea y actualiza
         5. Hace commit de los cambios
-        6. Devuelve el usuario actualizado
+        6. Registra el evento en bitácora
+        7. Devuelve el usuario actualizado
     
     **Retorna:**
         - UsuarioResponse: Usuario con los datos actualizados
@@ -156,6 +159,27 @@ def update_current_profile(
         db=db,
         usuario_id=current_user.id_usuario,
         datos=usuario_data
+    )
+    
+    # Registrar evento en bitácora
+    cambios = []
+    if usuario_data.nombre:
+        cambios.append(f"nombre='{usuario_data.nombre}'")
+    if usuario_data.apellido:
+        cambios.append(f"apellido='{usuario_data.apellido}'")
+    if usuario_data.telefono:
+        cambios.append(f"teléfono='{usuario_data.telefono}'")
+    if usuario_data.password:
+        cambios.append("contraseña=actualizada")
+    
+    registrar_evento_bitacora(
+        db=db,
+        request=request,
+        id_usuario=current_user.id_usuario,
+        nombre_usuario=f"{current_user.nombre} {current_user.apellido}",
+        evento="ACTUALIZAR",
+        recurso="PERFIL",
+        accion=f"Actualizó su perfil: {', '.join(cambios) if cambios else 'sin cambios'}"
     )
     
     return orm_to_dataclass(usuario_actualizado, UsuarioResponse)
@@ -233,6 +257,7 @@ def list_all_users(
 def update_user_estado(
     usuario_id: int,
     estado_data: UsuarioEstadoUpdate,
+    request: Request,
     current_user: UsuarioResponse = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -254,8 +279,9 @@ def update_user_estado(
         2. Busca el usuario por ID
         3. Valida que el nuevo estado sea válido
         4. Actualiza el estado
-        5. Hace commit y refresh
-        6. Retorna el usuario actualizado
+        5. Registra el evento en bitácora
+        6. Hace commit y refresh
+        7. Retorna el usuario actualizado
     
     **Retorna:**
         - UsuarioAdminResponse: Usuario con el estado actualizado
@@ -293,6 +319,9 @@ def update_user_estado(
             detail=f"Usuario con ID {usuario_id} no encontrado"
         )
     
+    # Guardar el estado anterior
+    estado_anterior = usuario.estado_cuenta.value
+    
     # Actualizar el estado
     if estado_data.estado_cuenta == "ACTIVO":
         usuario.estado_cuenta = EstadoCuenta.ACTIVO
@@ -307,6 +336,17 @@ def update_user_estado(
     # Guardar cambios
     db.commit()
     
+    # Registrar evento en bitácora
+    registrar_evento_bitacora(
+        db=db,
+        request=request,
+        id_usuario=current_user.id_usuario,
+        nombre_usuario=f"{current_user.nombre} {current_user.apellido}",
+        evento="CAMBIAR_ESTADO",
+        recurso="USUARIO",
+        accion=f"Cambió estado del usuario '{usuario.email}' de {estado_anterior} a {usuario.estado_cuenta.value}"
+    )
+    
     # Recargar el usuario con su rol cargado con joinedload
     usuario = db.query(Usuario).options(
         joinedload(Usuario.rol)
@@ -319,6 +359,7 @@ def update_user_estado(
 def update_user_rol(
     usuario_id: int,
     rol_data: UsuarioRolUpdate,
+    request: Request,
     current_user: UsuarioResponse = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -340,8 +381,9 @@ def update_user_rol(
         2. Busca el usuario por ID
         3. Verifica que el rol exista
         4. Actualiza el id_rol del usuario
-        5. Hace commit y refresh
-        6. Retorna el usuario actualizado
+        5. Registra el evento en bitácora
+        6. Hace commit y refresh
+        7. Retorna el usuario actualizado
     
     **Retorna:**
         - UsuarioAdminResponse: Usuario con el nuevo rol
@@ -388,11 +430,25 @@ def update_user_rol(
             detail=f"Rol con ID {rol_data.id_rol} no encontrado"
         )
     
+    # Guardar el rol anterior
+    rol_anterior = usuario.rol.nombre if usuario.rol else "desconocido"
+    
     # Actualizar el rol
     usuario.id_rol = rol_data.id_rol
     
     # Guardar cambios
     db.commit()
+    
+    # Registrar evento en bitácora
+    registrar_evento_bitacora(
+        db=db,
+        request=request,
+        id_usuario=current_user.id_usuario,
+        nombre_usuario=f"{current_user.nombre} {current_user.apellido}",
+        evento="CAMBIAR_ROL",
+        recurso="USUARIO",
+        accion=f"Cambió rol del usuario '{usuario.email}' de {rol_anterior} a {rol.nombre}"
+    )
     
     # Recargar el usuario con su rol cargado con joinedload
     usuario = db.query(Usuario).options(
