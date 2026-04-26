@@ -5,9 +5,10 @@ Data Access Layer para operaciones de base de datos
 
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+from dataclasses import asdict
 from models.vehiculo import Vehiculo
-from models.user import Usuario
-from schemas.vehiculo import VehiculoCreate, VehiculoUpdate, MarcaCreate, ModeloCreate, ModeloUpdate
+from models.user import Usuario, Cliente
+from schemas.vehiculo import VehiculoCreate, VehiculoUpdate
 from fastapi import HTTPException, status
 
 # ============================================================================
@@ -16,16 +17,15 @@ from fastapi import HTTPException, status
 
 def crear_vehiculo(db: Session, id_cliente: int, datos: VehiculoCreate) -> Vehiculo:
     """
-    Crea un nuevo vehículo para un usuario/cliente
+    Crea un nuevo vehículo para un cliente
     
     Validaciones:
         - La placa debe ser única
-        - El modelo debe existir
         - El cliente debe existir y estar activo
     
     Args:
         db: Sesión de base de datos
-        id_cliente: ID del usuario propietario del vehículo
+        id_cliente: ID del cliente (de tabla Cliente) propietario del vehículo
         datos: Datos del vehículo a crear
     
     Returns:
@@ -34,12 +34,12 @@ def crear_vehiculo(db: Session, id_cliente: int, datos: VehiculoCreate) -> Vehic
     Raises:
         HTTPException: Si hay errores de validación
     """
-    # Verificar que el cliente existe y está activo
-    cliente = db.query(Usuario).filter(Usuario.id == id_cliente).first()
+    # Verificar que el cliente existe en la tabla Cliente
+    cliente = db.query(Cliente).filter(Cliente.id_cliente == id_cliente).first()
     if not cliente:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Usuario no encontrado"
+            detail="Cliente no encontrado. El usuario debe ser un cliente registrado para crear vehículos."
         )
     
     # Verificar que la placa sea única
@@ -53,11 +53,11 @@ def crear_vehiculo(db: Session, id_cliente: int, datos: VehiculoCreate) -> Vehic
     try:
         nuevo_vehiculo = Vehiculo(
             id_cliente=id_cliente,
-            id_modelo=datos.id_modelo,
+            marca=datos.marca,
+            modelo=datos.modelo,
             placa=datos.placa,
-            vin=datos.vin,
             color=datos.color,
-            año=datos.año
+            anio=datos.anio
         )
         db.add(nuevo_vehiculo)
         db.commit()
@@ -65,20 +65,32 @@ def crear_vehiculo(db: Session, id_cliente: int, datos: VehiculoCreate) -> Vehic
         return nuevo_vehiculo
     except IntegrityError as e:
         db.rollback()
-        if "placa" in str(e):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="La placa ya existe en el sistema"
-            )
+        # Imprimimos el error real en la terminal para que puedas debuggear si algo falla
+        print(f"\n{'='*80}")
+        print(f"💥 ERROR DE BASE DE DATOS AL CREAR VEHÍCULO")
+        print(f"{'='*80}")
+        print(f"📍 Tipo de error: {type(e).__name__}")
+        print(f"📍 Mensaje original: {str(e)}")
+        print(f"📍 Detalles de la excepción: {e.orig}")
+        print(f"📍 Código de error: {e.orig.pgcode if hasattr(e.orig, 'pgcode') else 'N/A'}")
+        print(f"\n🔍 DATOS QUE SE INTENTARON INSERTAR:")
+        print(f"   - id_cliente: {id_cliente}")
+        print(f"   - marca: {datos.marca}")
+        print(f"   - modelo: {datos.modelo}")
+        print(f"   - placa: {datos.placa}")
+        print(f"   - color: {datos.color}")
+        print(f"   - anio: {datos.anio}")
+        print(f"{'='*80}\n")
+        
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Error al crear el vehículo. Verifique los datos."
+            detail="Error al guardar el vehículo. Verifique que todos los datos sean correctos."
         )
 
 
 def obtener_vehiculo_por_id(db: Session, id_vehiculo: int) -> Vehiculo:
     """Obtiene un vehículo específico por ID"""
-    vehiculo = db.query(Vehiculo).filter(Vehiculo.id == id_vehiculo).first()
+    vehiculo = db.query(Vehiculo).filter(Vehiculo.id_vehiculo == id_vehiculo).first()
     if not vehiculo:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -98,7 +110,7 @@ def obtener_vehiculos_por_cliente(db: Session, id_cliente: int, skip: int = 0, l
     ).offset(skip).limit(limit).all()
 
 
-def obtener_vehculos_disponibles(db: Session, skip: int = 0, limit: int = 100) -> list:
+def obtener_vehiculos_disponibles(db: Session, skip: int = 0, limit: int = 100) -> list:
     """Obtiene vehículos con estado ACTIVO"""
     return db.query(Vehiculo).filter(
         Vehiculo.estado == "ACTIVO"
@@ -131,7 +143,7 @@ def actualizar_vehiculo(db: Session, id_vehiculo: int, id_cliente: int, datos: V
     if datos.placa and datos.placa != vehiculo.placa:
         placa_existente = db.query(Vehiculo).filter(
             Vehiculo.placa == datos.placa,
-            Vehiculo.id != id_vehiculo
+            Vehiculo.id_vehiculo != id_vehiculo
         ).first()
         if placa_existente:
             raise HTTPException(
@@ -140,9 +152,10 @@ def actualizar_vehiculo(db: Session, id_vehiculo: int, id_cliente: int, datos: V
             )
     
     # Actualizar solo los campos proporcionados
-    datos_dict = datos.dict(exclude_unset=True)
+    datos_dict = asdict(datos)
     for campo, valor in datos_dict.items():
-        setattr(vehiculo, campo, valor)
+        if valor is not None:  # Solo actualizar campos no-None
+            setattr(vehiculo, campo, valor)
     
     db.commit()
     db.refresh(vehiculo)

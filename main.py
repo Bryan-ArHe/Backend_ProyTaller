@@ -7,13 +7,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from config import get_settings
 from models.database import engine, Base
-from routers import auth, dashboard, vehiculos, incidentes, usuarios, roles
+from routers import auth, dashboard, vehiculos, incidentes, usuarios, roles, bitacora
 
 # Importar todos los modelos para que SQLAlchemy los reconozca en metadata
 # IMPORTANTE: Estos imports son necesarios para que Base.metadata.create_all() funcione
 from models.user import Usuario, Rol, Permiso, Cliente, GestorTaller, Tecnico, NotificacionPush
 from models.vehiculo import Vehiculo
 from models.incidente import Incidente, Evidencia, TriajeIA, HistorialIncidente, MensajeInApp
+from models.bitacora import Bitacora
 from models.despacho import (
     SolicitudServicio, AsignacionCandidato, Repuesto, DetalleServicio,
     UbicacionTracking, Pago, Comision, Calificacion
@@ -39,7 +40,7 @@ app.add_middleware(
         "https://api.tudominio.com",
         "http://localhost:8000",  # Para desarrollo local
         "http://localhost:8001",
-        "*",  # Permitir todos los orígenes en desarrollo
+        #"*",   Permitir todos los orígenes en desarrollo
     ],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
@@ -145,6 +146,9 @@ app.include_router(vehiculos.router)
 
 # Router de Incidentes - Reporte de emergencias y evidencia multimedia
 app.include_router(incidentes.router)
+
+# Router de Bitácora - Registro de eventos y auditoría
+app.include_router(bitacora.route)
 
 
 # Endpoint raíz para verificar que la API está activa

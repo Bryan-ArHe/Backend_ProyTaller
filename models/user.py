@@ -111,6 +111,7 @@ class Usuario(Base):
     gestor_taller = relationship("GestorTaller", back_populates="usuario", uselist=False, cascade="all, delete-orphan")
     tecnico = relationship("Tecnico", back_populates="usuario", uselist=False, cascade="all, delete-orphan")
     notificaciones = relationship("NotificacionPush", back_populates="usuario", cascade="all, delete-orphan")
+    bitacoras = relationship("Bitacora", back_populates="usuario", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<Usuario(id={self.id}, email='{self.email}', estado={self.estado_cuenta})>"

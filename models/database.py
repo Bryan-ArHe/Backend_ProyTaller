@@ -12,12 +12,25 @@ from config import get_settings
 settings = get_settings()
 DATABASE_URL = settings.database_url
 
+# Configurar parámetros adicionales para Supabase
+# Supabase requiere SSL mode=require
+connect_args = {
+    "connect_timeout": 10,  # Timeout de 10 segundos para la conexión
+}
+
+if "supabase.co" in DATABASE_URL:
+    connect_args["sslmode"] = "require"
+
 # Crear el motor (engine) de SQLAlchemy
 # Para producción, considera usar asyncio con asyncpg para mejor rendimiento
 engine = create_engine(
     DATABASE_URL,
     echo=settings.debug,  # Mostrar sentencias SQL en consola si DEBUG=True
-    pool_pre_ping=True  # Verificar conexiones antes de usarlas
+    pool_pre_ping=True,  # Verificar conexiones antes de usarlas
+    pool_size=5,  # Limitar tamaño del pool para evitar saturación
+    max_overflow=10,  # Máximo de conexiones adicionales
+    pool_recycle=3600,  # Reciclar conexiones cada hora
+    connect_args=connect_args
 )
 
 # SessionLocal: Factory para crear sesiones de base de datos

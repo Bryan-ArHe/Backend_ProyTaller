@@ -5,9 +5,12 @@ from models.database import SessionLocal, engine, Base
 from models.user import Usuario, Rol, Permiso, EstadoCuenta, Cliente, GestorTaller, Tecnico
 from models.vehiculo import Vehiculo
 from models.incidente import Incidente, Evidencia, TriajeIA, HistorialIncidente, MensajeInApp
+from models.bitacora import Bitacora
 from models.despacho import SolicitudServicio, AsignacionCandidato, Repuesto, DetalleServicio, UbicacionTracking, Pago, Comision, Calificacion
 from security.password import hash_password
 
+# Este script se usa para reiniciar la base de datos (eliminar y crear tablas) y cargar datos de prueba
+"""
 def reset_database():
     print('Eliminando todas las tablas...')
     # Eliminar con CASCADE para quitar tipos ENUM y dependencias
@@ -20,6 +23,23 @@ def reset_database():
     print('Creando nuevas tablas...')
     Base.metadata.create_all(bind=engine)
     print('Tablas creadas')
+"""
+
+def reset_database():
+    print('Eliminando todas las tablas y limpiando esquema...')
+    # Usamos DROP SCHEMA CASCADE para asegurar una limpieza total en PostgreSQL/Supabase
+    with engine.connect() as conn:
+        conn.execute(text("DROP SCHEMA public CASCADE;"))
+        conn.execute(text("CREATE SCHEMA public;"))
+        conn.execute(text("GRANT ALL ON SCHEMA public TO postgres;"))
+        conn.execute(text("GRANT ALL ON SCHEMA public TO public;"))
+        conn.commit()
+    print('Tablas eliminadas y esquema recreado')
+    
+    print('Creando nuevas tablas desde los modelos...')
+    # SQLAlchemy creará de nuevo la estructura definida en tus modelos
+    Base.metadata.create_all(bind=engine)
+    print('Tablas creadas correctamente')
 
 def create_test_data():
     db = SessionLocal()

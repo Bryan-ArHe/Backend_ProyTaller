@@ -4,12 +4,13 @@ Sistema de emergencias vehiculares con triaje automático y captura multimedia
 Protegido con autenticación JWT e inyección de dependencias
 """
 
-from fastapi import APIRouter, Depends, status, HTTPException
+from fastapi import APIRouter, Depends, status, HTTPException, Request
 from sqlalchemy.orm import Session
 from typing import List
 from models.database import get_db
 from dependencies import get_current_user
 from schemas.user import UsuarioResponse
+from utils.bitacora_helper import registrar_evento_bitacora
 from schemas.incidente import (
     IncidenteCreate, IncidenteResponse, IncidenteDetailedResponse,
     IncidenteListResponse, EvidenciaCreate, EvidenciaResponse,
@@ -39,6 +40,7 @@ router = APIRouter(
 @router.post("/reportar", response_model=IncidenteDetailedResponse, status_code=201)
 def reportar_incidente(
     datos: IncidenteCreate,
+    request: Request,
     current_user: UsuarioResponse = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -83,7 +85,20 @@ def reportar_incidente(
         ]
     }
     """
-    incidente = crear_incidente(db, current_user.id, datos)
+    incidente = crear_incidente(db, current_user.id_usuario, datos)
+    
+    # Registrar evento CREATE en bitácora
+    registrar_evento_bitacora(
+        db=db,
+        request=request,
+        id_usuario=current_user.id_usuario,
+        nombre_usuario=f"{current_user.nombre} {current_user.apellido}",
+        evento="CREATE",
+        recurso="INCIDENTE",
+        accion=f"Nuevo incidente creado para vehículo ID {datos.id_vehiculo}. Prioridad: {incidente.prioridad.value}",
+        payload=f"descripcion={datos.descripcion[:100]}..."
+    )
+    
     return incidente
 
 
@@ -158,6 +173,7 @@ def obtener_detalles_incidente(
 def agregar_evidencia_incidente(
     id_incidente: int,
     datos: EvidenciaCreate,
+    request: Request,
     current_user: UsuarioResponse = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -181,13 +197,25 @@ def agregar_evidencia_incidente(
     incidente = obtener_incidente_por_id(db, id_incidente)
     
     # Validar propiedad del incidente
-    if incidente.id_cliente != current_user.id:
+    if incidente.id_cliente != current_user.id_usuario:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No puede agregar evidencias a este incidente"
         )
     
     evidencia = crear_evidencia(db, id_incidente, datos)
+    
+    # Registrar evento CREATE en bitácora
+    registrar_evento_bitacora(
+        db=db,
+        request=request,
+        id_usuario=current_user.id_usuario,
+        nombre_usuario=f"{current_user.nombre} {current_user.apellido}",
+        evento="CREATE",
+        recurso="EVIDENCIA",
+        accion=f"Nueva evidencia agregada al incidente #{id_incidente}. Tipo: {datos.tipo}"
+    )
+    
     return evidencia
 
 
@@ -223,6 +251,7 @@ def obtener_evidencias_del_incidente(
 def eliminar_evidencia_incidente(
     id_incidente: int,
     id_evidencia: int,
+    request: Request,
     current_user: UsuarioResponse = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -243,13 +272,25 @@ def eliminar_evidencia_incidente(
     incidente = obtener_incidente_por_id(db, id_incidente)
     
     # Validar propiedad
-    if incidente.id_cliente != current_user.id:
+    if incidente.id_cliente != current_user.id_usuario:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No puede eliminar evidencias de este incidente"
         )
     
     eliminar_evidencia(db, id_evidencia)
+    
+    # Registrar evento DELETE en bitácora
+    registrar_evento_bitacora(
+        db=db,
+        request=request,
+        id_usuario=current_user.id_usuario,
+        nombre_usuario=f"{current_user.nombre} {current_user.apellido}",
+        evento="DELETE",
+        recurso="EVIDENCIA",
+        accion=f"Evidencia #{id_evidencia} eliminada del incidente #{id_incidente}"
+    )
+    
     return None
 
 
@@ -343,6 +384,7 @@ def historial_incidentes_vehiculo(
 def actualizar_estado(
     id_incidente: int,
     nuevo_estado: str,
+    request: Request,
     current_user: UsuarioResponse = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -365,7 +407,20 @@ def actualizar_estado(
         Incidente con nuevo estado actualizado
     """
     # En producción, validar que es operador/admin
+    incidente_anterior = obtener_incidente_por_id(db, id_incidente)
     incidente = actualizar_estado_incidente(db, id_incidente, nuevo_estado)
+    
+    # Registrar evento UPDATE en bitácora
+    registrar_evento_bitacora(
+        db=db,
+        request=request,
+        id_usuario=current_user.id_usuario,
+        nombre_usuario=f"{current_user.nombre} {current_user.apellido}",
+        evento="UPDATE",
+        recurso="INCIDENTE",
+        accion=f"Estado del incidente #{id_incidente} actualizado de {incidente_anterior.estado.value} a {nuevo_estado}"
+    )
+    
     return incidente
 
 
@@ -373,6 +428,7 @@ def actualizar_estado(
 def actualizar_prioridad(
     id_incidente: int,
     nueva_prioridad: str,
+    request: Request,
     current_user: UsuarioResponse = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -390,7 +446,20 @@ def actualizar_prioridad(
     Returns:
         Incidente con prioridad actualizada
     """
+    incidente_anterior = obtener_incidente_por_id(db, id_incidente)
     incidente = actualizar_prioridad_incidente(db, id_incidente, nueva_prioridad)
+    
+    # Registrar evento UPDATE en bitácora
+    registrar_evento_bitacora(
+        db=db,
+        request=request,
+        id_usuario=current_user.id_usuario,
+        nombre_usuario=f"{current_user.nombre} {current_user.apellido}",
+        evento="UPDATE",
+        recurso="INCIDENTE",
+        accion=f"Prioridad del incidente #{id_incidente} actualizada de {incidente_anterior.prioridad.value} a {nueva_prioridad}"
+    )
+    
     return incidente
 
 
