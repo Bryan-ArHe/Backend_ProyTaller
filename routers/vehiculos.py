@@ -4,13 +4,14 @@ CRUD protegido con autenticación JWT
 Implementa inyección de dependencias para DB y usuario autenticado
 """
 
-from fastapi import APIRouter, Depends, status, HTTPException
+from fastapi import APIRouter, Depends, status, HTTPException, Request
 from sqlalchemy.orm import Session
 from typing import List
 from models.database import get_db
 from models.user import Cliente
 from dependencies import get_current_user
 from schemas.user import UsuarioResponse
+from utils.bitacora_helper import registrar_evento_bitacora
 from schemas.vehiculo import (
     VehiculoCreate, VehiculoUpdate, VehiculoResponse,
     VehiculoDetailedResponse, VehiculoListResponsePydantic,
@@ -142,6 +143,7 @@ def obtener_mi_vehiculo(
 @router.post("", response_model=VehiculoResponsePydantic, status_code=201)
 def registrar_vehiculo(
     datos: VehiculoCreate,
+    request: Request,
     current_user: UsuarioResponse = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -173,6 +175,18 @@ def registrar_vehiculo(
     
     # Crear el vehículo con el id_cliente correcto
     vehiculo = crear_vehiculo(db, cliente.id_cliente, datos)
+    
+    # Registrar evento CREATE en bitácora
+    registrar_evento_bitacora(
+        db=db,
+        request=request,
+        id_usuario=current_user.id_usuario,
+        nombre_usuario=f"{current_user.nombre} {current_user.apellido}",
+        evento="CREATE",
+        recurso="VEHICULO",
+        accion=f"Nuevo vehículo registrado: {datos.marca} {datos.modelo} (Placa: {datos.placa})"
+    )
+    
     return VehiculoResponsePydantic.from_orm(vehiculo)
 
 
@@ -180,6 +194,7 @@ def registrar_vehiculo(
 def actualizar_mi_vehiculo(
     id_vehiculo: int,
     datos: VehiculoUpdate,
+    request: Request,
     current_user: UsuarioResponse = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -209,13 +224,36 @@ def actualizar_mi_vehiculo(
             detail="El usuario actual no tiene un perfil de cliente."
         )
     
+    # Obtener datos anteriores para el registro de bitácora
+    vehiculo_anterior = obtener_vehiculo_por_id(db, id_vehiculo)
+    cambios = []
+    if datos.placa:
+        cambios.append(f"placa={vehiculo_anterior.placa}→{datos.placa}")
+    if datos.color:
+        cambios.append(f"color={vehiculo_anterior.color}→{datos.color}")
+    if datos.anio:
+        cambios.append(f"año={vehiculo_anterior.anio}→{datos.anio}")
+    
     vehiculo = actualizar_vehiculo(db, id_vehiculo, cliente.id_cliente, datos)
+    
+    # Registrar evento UPDATE en bitácora
+    registrar_evento_bitacora(
+        db=db,
+        request=request,
+        id_usuario=current_user.id_usuario,
+        nombre_usuario=f"{current_user.nombre} {current_user.apellido}",
+        evento="UPDATE",
+        recurso="VEHICULO",
+        accion=f"Vehículo {vehiculo_anterior.placa} actualizado: {', '.join(cambios)}"
+    )
+    
     return VehiculoResponsePydantic.from_orm(vehiculo)
 
 
 @router.delete("/{id_vehiculo}", status_code=204)
 def eliminar_mi_vehiculo(
     id_vehiculo: int,
+    request: Request,
     current_user: UsuarioResponse = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -240,7 +278,23 @@ def eliminar_mi_vehiculo(
             detail="El usuario actual no tiene un perfil de cliente."
         )
     
+    # Obtener datos del vehículo antes de eliminarlo
+    vehiculo = obtener_vehiculo_por_id(db, id_vehiculo)
+    placa = vehiculo.placa
+    
     eliminar_vehiculo(db, id_vehiculo, cliente.id_cliente)
+    
+    # Registrar evento DELETE en bitácora
+    registrar_evento_bitacora(
+        db=db,
+        request=request,
+        id_usuario=current_user.id_usuario,
+        nombre_usuario=f"{current_user.nombre} {current_user.apellido}",
+        evento="DELETE",
+        recurso="VEHICULO",
+        accion=f"Vehículo {placa} (ID: {id_vehiculo}) eliminado"
+    )
+    
     return None
 
 

@@ -11,7 +11,7 @@ class Bitacora(Base):
     nombre_usuario = Column(String(50), nullable=False)
     evento = Column(String(20), nullable=False)
     recurso = Column(String(50), nullable=False)
-    accion = Column(String(50), nullable=False)
+    accion = Column(String(255), nullable=False)
     ip = Column(String(50), nullable=False)
     endpoint = Column(String(100), nullable=False)
     payload = Column(Text, nullable=True)

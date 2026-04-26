@@ -3,9 +3,11 @@ routers/auth.py - Router con los endpoints de autenticación
 Incluye: registro, login y obtención de datos del usuario autenticado
 """
 
+import re
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from dataclasses import dataclass, field
+from models.bitacora import Bitacora
 from models.database import get_db
 from models.user import Usuario, Rol, EstadoCuenta
 from schemas.user import UsuarioCreate, UsuarioResponse, LoginData, Token
@@ -30,43 +32,7 @@ router = APIRouter(
 
 
 @router.post("/register", response_model=UsuarioResponse, status_code=status.HTTP_201_CREATED)
-def register(usuario_data: UsuarioCreate, db: Session = Depends(get_db)):
-    """
-    Endpoint para registrar un nuevo usuario.
-    
-    **Requisitos:**
-    - El email debe ser único
-    - La contraseña debe tener mínimo 8 caracteres
-    - El id_rol debe existir en la base de datos
-    
-    **Pasos:**
-    1. Valida que el email no exista
-    2. Valida que el rol exista
-    3. Hashea la contraseña con bcrypt
-    4. Crea y guarda el usuario en la BD
-    
-    Args:
-        usuario_data: Datos del usuario a registrar (UsuarioCreate)
-        db: Sesión de base de datos
-        
-    Returns:
-        UsuarioResponse: Datos del usuario creado (sin password_hash)
-        
-    Raises:
-        HTTPException 400: Si el email ya existe o el rol no existe
-        
-    Ejemplo de request:
-        POST /auth/register
-        {
-            "nombre": "Juan",
-            "apellido": "Pérez",
-            "email": "juan@example.com",
-            "telefono": "3001234567",
-            "password": "MiContraseña123",
-            "id_rol": 1
-        }
-    """
-    
+def register(usuario_data: UsuarioCreate, request: Request, db: Session = Depends(get_db)):
     # 1. Verificar que el email no esté registrado
     usuario_existente = db.query(Usuario).filter(
         Usuario.email == usuario_data.email
@@ -102,43 +68,32 @@ def register(usuario_data: UsuarioCreate, db: Session = Depends(get_db)):
     
     # 5. Guardar en la base de datos
     db.add(nuevo_usuario)
+    db.flush()  # Flush para obtener el ID antes de commit
+    
+    # 6. Registrar evento CREATE en bitácora
+    registrar_evento_bitacora(
+        db=db,
+        request=request,
+        id_usuario=nuevo_usuario.id_usuario,
+        nombre_usuario=f"{nuevo_usuario.nombre} {nuevo_usuario.apellido}",
+        evento="CREATE",
+        recurso="USUARIO",
+        accion=f"Nuevo usuario registrado: {nuevo_usuario.email}"
+    )
+    
     db.commit()
     db.refresh(nuevo_usuario)
     
     return orm_to_dataclass(nuevo_usuario, UsuarioResponse)
 
 
+import re
+from fastapi import APIRouter, Depends, HTTPException, status, Request
+from sqlalchemy.orm import Session
+# Asegúrate de tener tus imports correctos aquí
+
 @router.post("/login", response_model=Token)
 def login(credenciales: LoginData, request: Request, db: Session = Depends(get_db)):
-    """
-    Endpoint para autenticar un usuario y obtener un token JWT.
-    
-    **Pasos:**
-    1. Busca el usuario por email
-    2. Verifica que la contraseña sea correcta
-    3. Verifica que la cuenta esté activa
-    4. Genera un token JWT
-    5. Registra el evento en bitácora
-    
-    Args:
-        credenciales: Email y contraseña del usuario (LoginData)
-        request: Objeto Request para obtener IP del cliente
-        db: Sesión de base de datos
-        
-    Returns:
-        Token: Objeto con access_token y token_type
-        
-    Raises:
-        HTTPException 401: Si el email no existe, contraseña es incorrecta o cuenta inactiva
-        
-    Ejemplo de request:
-        POST /auth/login
-        {
-            "email": "juan@example.com",
-            "password": "MiContraseña123"
-        }
-    """
-    
     # 1. Buscar usuario por email
     usuario = db.query(Usuario).filter(
         Usuario.email == credenciales.email
@@ -166,10 +121,22 @@ def login(credenciales: LoginData, request: Request, db: Session = Depends(get_d
             detail="La cuenta de este usuario está inactiva"
         )
     
-    # 4. Generar token JWT
-    access_token = create_access_token(data={"sub": usuario.email})
-    
-    # 5. Registrar evento en bitácora
+    # --- DETECCIÓN DE DISPOSITIVO ---
+    ua = request.headers.get("user-agent", "").lower()
+    es_movil = bool(re.search(r"mobile|android|iphone|ipad", ua))
+    # Usamos minúsculas para mantener consistencia y evitar bugs
+    tipo_dispositivo = "mobile" if es_movil else "web" 
+
+    # --- REGLA DE NEGOCIO ---
+    # Roles: 2 = Cliente, 3 = Técnico 
+    if usuario.id_rol in [2, 3] and tipo_dispositivo == "web":
+        # Bloqueamos el acceso porque intentan entrar desde PC
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso denegado. Los clientes y técnicos solo pueden ingresar mediante la aplicación móvil."
+        )
+
+    # --- REGISTRO EN BITÁCORA ---
     registrar_evento_bitacora(
         db=db,
         request=request,
@@ -177,8 +144,12 @@ def login(credenciales: LoginData, request: Request, db: Session = Depends(get_d
         nombre_usuario=f"{usuario.nombre} {usuario.apellido}",
         evento="LOGIN",
         recurso="AUTENTICACION",
-        accion=f"Usuario {usuario.email} inició sesión"
+        accion=f"Usuario {usuario.email} inició sesión",
+        dispositivo=tipo_dispositivo
     )
+
+    # --- GENERAR TOKEN ---
+    access_token = create_access_token(data={"sub": usuario.email})
     
     return {"access_token": access_token, "token_type": "bearer"}
 
@@ -208,6 +179,68 @@ def get_current_user_info(current_user: UsuarioResponse = Depends(get_current_us
             Authorization: Bearer <token_jwt>
     """
     return current_user
+
+
+@router.post("/logout", status_code=status.HTTP_200_OK)
+def logout(
+    request: Request,
+    current_user: UsuarioResponse = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Endpoint para registrar el logout de un usuario.
+    
+    **Descripción:**
+    - Registra el evento de logout en la bitácora
+    - Requiere token JWT válido para confirmar la identidad del usuario
+    - El logout en sí es cliente-side (eliminar token), esto solo registra el evento
+    
+    **Seguridad:**
+    - Requiere un token JWT válido en el header Authorization
+    
+    **Respuesta:**
+    ```json
+    {
+        "mensaje": "Sesión cerrada exitosamente",
+        "email": "usuario@example.com"
+    }
+    ```
+    
+    **Errores:**
+        - 401 Unauthorized: Token inválido o expirado
+        - 403 Forbidden: Cuenta inactiva
+    
+    **Ejemplo:**
+        POST /auth/logout
+        Headers:
+            Authorization: Bearer <token_jwt>
+    
+    Returns:
+        dict: Mensaje de éxito y email del usuario
+    """
+    try:
+        # Registrar evento LOGOUT en bitácora
+        registrar_evento_bitacora(
+            db=db,
+            request=request,
+            id_usuario=current_user.id_usuario,
+            nombre_usuario=f"{current_user.nombre} {current_user.apellido}",
+            evento="LOGOUT",
+            recurso="AUTENTICACION",
+            accion="Usuario cerró sesión"
+        )
+        
+        return {
+            "mensaje": "Sesión cerrada exitosamente",
+            "email": current_user.email
+        }
+    except Exception as e:
+        # Log del error pero retornar éxito igual (logout es operación no-crítica)
+        print(f"Error al registrar logout: {str(e)}")
+        return {
+            "mensaje": "Sesión cerrada (registro no disponible)",
+            "email": current_user.email
+        }
 
 
 # ============================================================================
