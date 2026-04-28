@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, DateTime
 from sqlalchemy.sql import func
 from models.database import Base
+from sqlalchemy.orm import relationship
 
 class Taller(Base):
     __tablename__ = "talleres"
@@ -19,3 +20,6 @@ class Taller(Base):
     especialidad = Column(String, nullable=True)
     capacidad_vehiculos = Column(Integer, default=1)
     estado_activo = Column(Boolean, default=True)
+
+    # Relación bidireccional con el modelo Tecnico
+    tecnicos_asignados = relationship("models.tecnico.Tecnico", back_populates="taller")

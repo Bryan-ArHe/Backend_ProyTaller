@@ -59,7 +59,7 @@ class SolicitudServicio(Base):
     
     id_solicitud = Column(Integer, primary_key=True, index=True)
     id_incidente = Column(Integer, ForeignKey("incidente.id_incidente"), unique=True, nullable=False, index=True)
-    id_tecnico = Column(Integer, ForeignKey("tecnico.id_tecnico"), nullable=False, index=True)
+    #id_tecnico = Column(Integer, ForeignKey("tecnico.id_tecnico"), nullable=False, index=True)
     
     fecha_asignacion = Column(DateTime, default=datetime.utcnow, nullable=False)
     fecha_llegada_estimada = Column(DateTime, nullable=True)
@@ -67,7 +67,7 @@ class SolicitudServicio(Base):
     
     # Relaciones
     incidente = relationship("Incidente", back_populates="solicitud_servicio")
-    tecnico = relationship("Tecnico", back_populates="solicitudes_servicio")
+    #tecnico = relationship("Tecnico", back_populates="solicitudes_servicio")
     detalles_servicio = relationship("DetalleServicio", back_populates="solicitud", cascade="all, delete-orphan")
     pago = relationship("Pago", back_populates="solicitud", uselist=False)
     calificacion = relationship("Calificacion", back_populates="solicitud", uselist=False)
@@ -151,14 +151,14 @@ class UbicacionTracking(Base):
     __tablename__ = "ubicacion_tracking"
     
     id_tracking = Column(Integer, primary_key=True, index=True)
-    id_tecnico = Column(Integer, ForeignKey("tecnico.id_tecnico", ondelete="CASCADE"), nullable=False, index=True)
+    #id_tecnico = Column(Integer, ForeignKey("tecnico.id_tecnico", ondelete="CASCADE"), nullable=False, index=True)
     
     latitud = Column(Numeric(10, 7), nullable=False)
     longitud = Column(Numeric(10, 7), nullable=False)
     fecha_hora = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
     
     # Relaciones
-    tecnico = relationship("Tecnico", back_populates="ubicaciones_tracking")
+    #tecnico = relationship("Tecnico", back_populates="ubicaciones_tracking")
     
     def __repr__(self):
         return f"<UbicacionTracking(id={self.id}, tecnico_id={self.id_tecnico}, fecha={self.fecha_hora})>"
