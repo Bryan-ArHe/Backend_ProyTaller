@@ -92,7 +92,8 @@ def update_usuario(db: Session, usuario_id: int, datos) -> Optional[Usuario]:
     # Actualizar contraseña SOLO si se proporciona un valor válido
     # Ignorar si es None o string vacío
     if hasattr(datos, 'password') and datos.password and isinstance(datos.password, str) and datos.password.strip():
-        usuario.password_hash = hash_password(datos.password)
+        password_truncated = datos.password.encode('utf-8')[:72].decode('utf-8', errors='ignore')
+        usuario.password_hash = hash_password(password_truncated)
     
     db.commit()
     db.refresh(usuario)

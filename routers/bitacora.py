@@ -1,50 +1,46 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+# routers/bitacora.py
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from typing import List, Optional
 from models.database import get_db
-from models.bitacora import Bitacora
 from models.user import Usuario
 from schemas.bitacora import BitacoraResponse
-from dependencies import get_current_user
-from crud import bitacora as crud_bitacora
-from typing import List
+from auth.dependencies import get_current_user, check_permissions
+import models.bitacora as bitacora_model
 
-router = APIRouter( prefix="/bitacora", tags=["Bitácora"])
+router = APIRouter(prefix="/bitacora", tags=["Auditoría y Logs"])
 
 @router.get("/", response_model=List[BitacoraResponse])
-def listar_bitacora(
-    tipo: str = None,
-    user_id: int = None,
-    current_user: dict = Depends(get_current_user),
+def obtener_bitacora(
+    skip: int = 0, 
+    limit: int = 100, 
+    evento: Optional[str] = Query(None, description="Filtrar por tipo de evento (LOGIN, CREAR, etc.)"),
     db: Session = Depends(get_db),
+    current_user: Usuario = Depends(check_permissions("Administrador"))
 ):
     """
-    GET /bitacora/
-    
-    Lista los eventos registrados en la bitácora con filtros opcionales.
-    
-    **Protección:** Requiere token JWT válido
-    
-    **Parámetros de consulta:**
-        - tipo (str, opcional): Filtra por tipo de evento (e.g., "login", "error")
-        - user_id (int, opcional): Filtra por ID de usuario
+    Obtiene el historial de actividades del sistema.
+    Solo accesible para usuarios con rol 'Administrador'.
     """
-    usuario = db.query(Usuario).filter(Usuario.id_usuario == current_user.id_usuario).first()
-    if not usuario or not usuario.rol or usuario.rol.nombre != "admin":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acceso denegado - solo administrador")
-    bitacora_registros = crud_bitacora.get_bitacora_by_id(db, tipo=tipo, user_id=user_id)
+    query = db.query(bitacora_model.Bitacora)
+    
+    if evento:
+        query = query.filter(bitacora_model.Bitacora.evento == evento)
+        
+    logs = query.order_by(bitacora_model.Bitacora.fecha.desc()).offset(skip).limit(limit).all()
+    return logs
 
-    return [
-        BitacoraResponse(
-            id_bitacora=l.id_bitacora,
-            fecha=l.fecha,
-            id_usuario=l.id_usuario,
-            nombre_usuario=l.nombre_usuario,
-            evento=l.evento,
-            recurso=l.recurso,
-            accion=l.accion,
-            ip=l.ip,
-            endpoint=l.endpoint,
-            payload=l.payload,
-            dispositivo=l.dispositivo
-        ) for l in bitacora_registros
-    ] 
+@router.get("/usuario/{id_usuario}", response_model=List[BitacoraResponse])
+def obtener_bitacora_por_usuario(
+    id_usuario: int,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(check_permissions("Administrador"))
+):
+    """
+    Obtiene todas las acciones realizadas por un usuario específico.
+    """
+    logs = db.query(bitacora_model.Bitacora).filter(
+        bitacora_model.Bitacora.id_usuario == id_usuario
+    ).order_by(bitacora_model.Bitacora.fecha.desc()).all()
+    
+    return logs

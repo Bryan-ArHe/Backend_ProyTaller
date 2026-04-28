@@ -10,9 +10,6 @@ from models.user import Usuario, Rol, EstadoCuenta
 from schemas.user import (
     UsuarioResponse,
     UsuarioUpdate,
-    UsuarioEstadoUpdate,
-    UsuarioRolUpdate,
-    UsuarioAdminResponse,
     UsuarioCreate,
 )
 from schemas.converters import orm_to_dataclass
@@ -21,11 +18,12 @@ from crud import usuarios as crud_usuarios
 from utils.bitacora_helper import registrar_evento_bitacora
 from security.password import hash_password
 from typing import List
+from auth.dependencies import get_current_user, check_permissions
 
 # Crear el router de usuarios
 router = APIRouter(
     prefix="/usuarios",
-    tags=["Usuarios"],
+    tags=["Gestion de Usuarios"],
     responses={
         401: {"description": "No autorizado"},
         403: {"description": "Acceso denegado"},
@@ -34,13 +32,19 @@ router = APIRouter(
 )
 
 
-@router.get("/me", response_model=UsuarioResponse)
-def get_current_profile(
-    current_user: UsuarioResponse = Depends(get_current_user),
+@router.get("/", response_model=List[UsuarioResponse])
+def listar_usuarios(
+    skip: int = 0, 
+    limit: int = 100, 
     db: Session = Depends(get_db),
+    current_user: Usuario = Depends(check_permissions("Administrador"))
 ):
-    
-    return current_user
+    """
+    Lista todos los usuarios del sistema. 
+    Solo accesible para el Administrador.
+    """
+    usuarios = db.query(Usuario).offset(skip).limit(limit).all()
+    return usuarios
 
 
 @router.put("/me", response_model=UsuarioResponse)
@@ -92,7 +96,7 @@ def update_current_profile(
     return orm_to_dataclass(usuario_actualizado, UsuarioResponse)
 
 
-@router.get("/", response_model=List[UsuarioAdminResponse])
+@router.get("/", response_model=List[UsuarioResponse])
 def list_all_users(
     current_user: UsuarioResponse = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -112,15 +116,15 @@ def list_all_users(
     
     # Convertir a UsuarioAdminResponse
     return [
-        orm_to_dataclass(usuario, UsuarioAdminResponse)
+        orm_to_dataclass(usuario, UsuarioResponse)
         for usuario in usuarios
     ]
 
 
-@router.patch("/{usuario_id}/estado", response_model=UsuarioAdminResponse)
+@router.patch("/{usuario_id}/estado", response_model=UsuarioResponse)
 def update_user_estado(
     usuario_id: int,
-    estado_data: UsuarioEstadoUpdate,
+    estado_data: UsuarioUpdate,
     request: Request,
     current_user: UsuarioResponse = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -177,13 +181,13 @@ def update_user_estado(
         joinedload(Usuario.rol)
     ).filter(Usuario.id_usuario == usuario_id).first()
     
-    return orm_to_dataclass(usuario, UsuarioAdminResponse)
+    return orm_to_dataclass(usuario, UsuarioResponse)
 
 
-@router.patch("/{usuario_id}/rol", response_model=UsuarioAdminResponse)
+@router.patch("/{usuario_id}/rol", response_model=UsuarioResponse)
 def update_user_rol(
     usuario_id: int,
-    rol_data: UsuarioRolUpdate,
+    rol_data: UsuarioUpdate,
     request: Request,
     current_user: UsuarioResponse = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -241,14 +245,14 @@ def update_user_rol(
         joinedload(Usuario.rol)
     ).filter(Usuario.id_usuario == usuario_id).first()
     
-    return orm_to_dataclass(usuario, UsuarioAdminResponse)
+    return orm_to_dataclass(usuario, UsuarioResponse)
 
 
 # ============================================================================
 # ENDPOINTS: ADMINISTRACIÓN DE USUARIOS (SOLO ADMIN)
 # ============================================================================
 
-@router.post("", response_model=UsuarioAdminResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=UsuarioResponse, status_code=status.HTTP_201_CREATED)
 def crear_usuario_admin(
     usuario_data: UsuarioCreate,
     request: Request,
@@ -281,8 +285,9 @@ def crear_usuario_admin(
             detail=f"El rol con ID {usuario_data.id_rol} no existe"
         )
     
-    # Hashear la contraseña
-    password_hash = hash_password(usuario_data.password)
+    # Hashear la contraseña (truncar a 72 bytes en UTF-8)
+    password_truncated = usuario_data.password.encode('utf-8')[:72].decode('utf-8', errors='ignore')
+    password_hash = hash_password(password_truncated)
     
     # Crear el nuevo usuario
     nuevo_usuario = Usuario(
@@ -318,10 +323,10 @@ def crear_usuario_admin(
         joinedload(Usuario.rol)
     ).filter(Usuario.id_usuario == nuevo_usuario.id_usuario).first()
     
-    return orm_to_dataclass(nuevo_usuario, UsuarioAdminResponse)
+    return orm_to_dataclass(nuevo_usuario, UsuarioResponse)
 
 
-@router.put("/{usuario_id}", response_model=UsuarioAdminResponse, status_code=status.HTTP_200_OK)
+@router.put("/{usuario_id}", response_model=UsuarioResponse, status_code=status.HTTP_200_OK)
 def actualizar_usuario_admin(
     usuario_id: int,
     usuario_data: UsuarioUpdate,
@@ -369,7 +374,8 @@ def actualizar_usuario_admin(
     # Actualizar contraseña
     if usuario_data.password:
         cambios.append("contraseña: *** → ***")
-        usuario.password_hash = hash_password(usuario_data.password)
+        password_truncated = usuario_data.password.encode('utf-8')[:72].decode('utf-8', errors='ignore')
+        usuario.password_hash = hash_password(password_truncated)
     
     # Guardar cambios
     db.commit()
@@ -390,7 +396,7 @@ def actualizar_usuario_admin(
         joinedload(Usuario.rol)
     ).filter(Usuario.id_usuario == usuario_id).first()
     
-    return orm_to_dataclass(usuario, UsuarioAdminResponse)
+    return orm_to_dataclass(usuario, UsuarioResponse)
 
 
 @router.delete("/{usuario_id}", status_code=status.HTTP_204_NO_CONTENT)

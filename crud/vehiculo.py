@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from dataclasses import asdict
 from models.vehiculo import Vehiculo
-from models.user import Usuario, Cliente
+from models.user import Usuario
 from schemas.vehiculo import VehiculoCreate, VehiculoUpdate
 from fastapi import HTTPException, status
 
@@ -15,17 +15,17 @@ from fastapi import HTTPException, status
 # OPERACIONES CRUD - VEHÍCULO
 # ============================================================================
 
-def crear_vehiculo(db: Session, id_cliente: int, datos: VehiculoCreate) -> Vehiculo:
+def crear_vehiculo(db: Session, id_usuario: int, datos: VehiculoCreate) -> Vehiculo:
     """
-    Crea un nuevo vehículo para un cliente
+    Crea un nuevo vehículo para un usuario
     
     Validaciones:
         - La placa debe ser única
-        - El cliente debe existir y estar activo
+        - El usuario debe existir y estar activo
     
     Args:
         db: Sesión de base de datos
-        id_cliente: ID del cliente (de tabla Cliente) propietario del vehículo
+        id_usuario: ID del usuario propietario del vehículo
         datos: Datos del vehículo a crear
     
     Returns:
@@ -34,12 +34,12 @@ def crear_vehiculo(db: Session, id_cliente: int, datos: VehiculoCreate) -> Vehic
     Raises:
         HTTPException: Si hay errores de validación
     """
-    # Verificar que el cliente existe en la tabla Cliente
-    cliente = db.query(Cliente).filter(Cliente.id_cliente == id_cliente).first()
-    if not cliente:
+    # Verificar que el usuario existe
+    usuario = db.query(Usuario).filter(Usuario.id_usuario == id_usuario).first()
+    if not usuario:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Cliente no encontrado. El usuario debe ser un cliente registrado para crear vehículos."
+            detail="Usuario no encontrado."
         )
     
     # Verificar que la placa sea única
@@ -52,7 +52,7 @@ def crear_vehiculo(db: Session, id_cliente: int, datos: VehiculoCreate) -> Vehic
     
     try:
         nuevo_vehiculo = Vehiculo(
-            id_cliente=id_cliente,
+            id_usuario=id_usuario,
             marca=datos.marca,
             modelo=datos.modelo,
             placa=datos.placa,
@@ -74,7 +74,7 @@ def crear_vehiculo(db: Session, id_cliente: int, datos: VehiculoCreate) -> Vehic
         print(f"📍 Detalles de la excepción: {e.orig}")
         print(f"📍 Código de error: {e.orig.pgcode if hasattr(e.orig, 'pgcode') else 'N/A'}")
         print(f"\n🔍 DATOS QUE SE INTENTARON INSERTAR:")
-        print(f"   - id_cliente: {id_cliente}")
+        print(f"   - id_usuario: {id_usuario}")
         print(f"   - marca: {datos.marca}")
         print(f"   - modelo: {datos.modelo}")
         print(f"   - placa: {datos.placa}")
@@ -99,14 +99,14 @@ def obtener_vehiculo_por_id(db: Session, id_vehiculo: int) -> Vehiculo:
     return vehiculo
 
 
-def obtener_vehiculos_por_cliente(db: Session, id_cliente: int, skip: int = 0, limit: int = 100) -> list:
+def obtener_vehiculos_por_cliente(db: Session, id_usuario: int, skip: int = 0, limit: int = 100) -> list:
     """
-    Obtiene todos los vehículos registrados por un cliente específico
+    Obtiene todos los vehículos registrados por un usuario específico
     
     Usado para que el usuario vea solo sus propios vehículos
     """
     return db.query(Vehiculo).filter(
-        Vehiculo.id_cliente == id_cliente
+        Vehiculo.id_usuario == id_usuario
     ).offset(skip).limit(limit).all()
 
 
@@ -117,14 +117,14 @@ def obtener_vehiculos_disponibles(db: Session, skip: int = 0, limit: int = 100) 
     ).offset(skip).limit(limit).all()
 
 
-def actualizar_vehiculo(db: Session, id_vehiculo: int, id_cliente: int, datos: VehiculoUpdate) -> Vehiculo:
+def actualizar_vehiculo(db: Session, id_vehiculo: int, id_usuario: int, datos: VehiculoUpdate) -> Vehiculo:
     """
     Actualiza un vehículo (solo el propietario puede actualizarlo)
     
     Args:
         db: Sesión de base de datos
         id_vehiculo: ID del vehículo a actualizar
-        id_cliente: ID del cliente (para verificar propiedad)
+        id_usuario: ID del usuario (para verificar propiedad)
         datos: Datos a actualizar
     
     Returns:
@@ -132,8 +132,8 @@ def actualizar_vehiculo(db: Session, id_vehiculo: int, id_cliente: int, datos: V
     """
     vehiculo = obtener_vehiculo_por_id(db, id_vehiculo)
     
-    # Verificar que el vehículo pertenece al cliente
-    if vehiculo.id_cliente != id_cliente:
+    # Verificar que el vehículo pertenece al usuario
+    if vehiculo.id_usuario != id_usuario:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No tiene permisos para actualizar este vehículo"
@@ -162,14 +162,14 @@ def actualizar_vehiculo(db: Session, id_vehiculo: int, id_cliente: int, datos: V
     return vehiculo
 
 
-def eliminar_vehiculo(db: Session, id_vehiculo: int, id_cliente: int) -> bool:
+def eliminar_vehiculo(db: Session, id_vehiculo: int, id_usuario: int) -> bool:
     """
     Elimina un vehículo (solo el propietario puede eliminarlo)
     """
     vehiculo = obtener_vehiculo_por_id(db, id_vehiculo)
     
     # Verificar propiedad
-    if vehiculo.id_cliente != id_cliente:
+    if vehiculo.id_usuario != id_usuario:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No tiene permisos para eliminar este vehículo"

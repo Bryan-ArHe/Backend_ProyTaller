@@ -11,15 +11,13 @@ from routers import auth, dashboard, vehiculos, incidentes, usuarios, roles, bit
 
 # Importar todos los modelos para que SQLAlchemy los reconozca en metadata
 # IMPORTANTE: Estos imports son necesarios para que Base.metadata.create_all() funcione
-from models.user import Usuario, Rol, Permiso, Cliente, GestorTaller, NotificacionPush
+from models.user import Usuario, Rol, Permiso
 from models.tecnico import Tecnico
+from models.taller import Taller
 from models.vehiculo import Vehiculo
+from models.solicitud import SolicitudServicio
 from models.incidente import Incidente, Evidencia, TriajeIA, HistorialIncidente, MensajeInApp
 from models.bitacora import Bitacora
-from models.despacho import (
-    SolicitudServicio, AsignacionCandidato, Repuesto, DetalleServicio,
-    UbicacionTracking, Pago, Comision, Calificacion
-)
 
 # Obtener configuración
 settings = get_settings()

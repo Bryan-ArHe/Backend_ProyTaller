@@ -25,7 +25,6 @@ def registrar_evento_bitacora(
     evento: str,
     recurso: str,
     accion: str,
-    payload: str = None,
     dispositivo: str = None
 ) -> None:
     """
@@ -33,18 +32,16 @@ def registrar_evento_bitacora(
     
     Args:
         db: Sesión de base de datos
-        request: Objeto Request de FastAPI (para obtener IP y endpoint)
+        request: Objeto Request de FastAPI (para obtener IP)
         id_usuario: ID del usuario que realiza la acción
         nombre_usuario: Nombre del usuario (para registro rápido)
-        evento: Tipo de evento (ej: "login", "crear", "actualizar", "eliminar")
+        evento: Tipo de evento (ej: "LOGIN", "CREAR", "ACTUALIZAR", "ELIMINAR")
         recurso: Recurso afectado (ej: "usuario", "incidente", "vehículo")
         accion: Descripción de la acción realizada
-        payload: Datos adicionales (JSON en string, opcional)
-        dispositivo: Tipo de dispositivo (opcional)
+        dispositivo: Tipo de dispositivo (ej: "WEB", "MOBILE") - opcional
     """
     try:
         ip = obtener_ip_cliente(request)
-        endpoint = str(request.url.path)
         
         datos_bitacora = BitacoraCreate(
             id_usuario=id_usuario,
@@ -53,12 +50,10 @@ def registrar_evento_bitacora(
             recurso=recurso,
             accion=accion,
             ip=ip,
-            endpoint=endpoint,
-            payload=payload,
             dispositivo=dispositivo
         )
         
-        crud_bitacora.crear_bitacora(db, datos_bitacora)
+        crud_bitacora.registrar_evento(db, datos_bitacora)
         db.commit()  # Commit de la transacción
     except Exception as e:
         # Log del error pero no interrumpe la ejecución

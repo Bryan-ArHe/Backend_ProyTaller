@@ -10,7 +10,7 @@ def hash_password(password: str) -> str:
     Hashea una contraseña en texto plano usando bcrypt.
     
     Args:
-        password: Contraseña en texto plano (máximo 72 caracteres)
+        password: Contraseña en texto plano (máximo 72 bytes en UTF-8)
         
     Returns:
         Contraseña hasheada (hash de bcrypt)
@@ -19,8 +19,13 @@ def hash_password(password: str) -> str:
         >>> hashed = hash_password("miContraseña123")
         >>> print(hashed)  # b'$2b$12$xyzabc...'
     """
-    # Limitar a 72 caracteres (limitación de bcrypt)
-    password_bytes = password[:72].encode('utf-8')
+    # Limitar a 72 bytes en UTF-8 (limitación de bcrypt)
+    # Importante: caracteres multibyte pueden exceder 72 bytes antes de llegar a 72 caracteres
+    password_bytes = password.encode('utf-8')[:72]
+    
+    # Validar que no se truncó incorrectamente en medio de un carácter multibyte
+    if len(password_bytes) > 72:
+        raise ValueError(f"❌ Error fatal: password cannot be longer than 72 bytes, truncate manually if necessary (e.g. my_password[:72])")
     
     # Generar salt y hash (rounds=12 es el estándar seguro)
     salt = bcrypt.gensalt(rounds=12)

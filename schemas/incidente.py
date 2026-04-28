@@ -1,36 +1,26 @@
 """
-schemas/incidente.py - Esquemas con Dataclasses para CRUD de Incidentes
+schemas/incidente.py - Esquemas Pydantic V2 para CRUD de Incidentes
 Validación y serialización para Incidentes y Evidencia Multimedia
 """
 
-from dataclasses import dataclass, field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, List
 from datetime import datetime
-from .validators import validate_string_length, validate_latitude, validate_longitude
 
 
 # ============================================================================
 # ESQUEMAS PARA EVIDENCIA
 # ============================================================================
 
-@dataclass
-class EvidenciaCreate:
+class EvidenciaCreate(BaseModel):
     """Esquema para capturar una evidencia en el reporte de incidente"""
-    tipo: str
-    url: str
-    tamano_bytes: Optional[int] = None
-    descripcion: Optional[str] = None
-    
-    def __post_init__(self):
-        validate_string_length(self.url, min_length=5, max_length=500, field_name="url")
-        if self.descripcion:
-            validate_string_length(self.descripcion, max_length=300, field_name="descripcion")
-        if self.tamano_bytes is not None and self.tamano_bytes < 1:
-            raise ValueError("tamano_bytes debe ser mayor a 0")
+    tipo: str = Field(..., min_length=1, max_length=50)
+    url: str = Field(..., min_length=5, max_length=500)
+    tamano_bytes: Optional[int] = Field(None, gt=0)
+    descripcion: Optional[str] = Field(None, max_length=300)
 
 
-@dataclass
-class EvidenciaResponse:
+class EvidenciaResponse(BaseModel):
     """Esquema de respuesta para Evidencia"""
     id_evidencia: int
     id_incidente: int
@@ -41,37 +31,30 @@ class EvidenciaResponse:
     fecha_captura: datetime
     fecha_registro: datetime
 
+    model_config = ConfigDict(from_attributes=True)
+
 
 # ============================================================================
 # ESQUEMAS PARA INCIDENTE
 # ============================================================================
 
-@dataclass
-class IncidenteCreate:
+class IncidenteCreate(BaseModel):
     """
     Esquema para reporte inicial de incidente
     Incluye datos del incidente y lista de evidencias
     """
-    id_vehiculo: int
-    descripcion: str
-    ubicacion_lat: Optional[float] = None
-    ubicacion_long: Optional[float] = None
-    evidencias: List[EvidenciaCreate] = field(default_factory=list)
-    
-    def __post_init__(self):
-        validate_string_length(self.descripcion, min_length=10, max_length=1000, field_name="descripcion")
-        if self.ubicacion_lat:
-            validate_latitude(self.ubicacion_lat)
-        if self.ubicacion_long:
-            validate_longitude(self.ubicacion_long)
+    id_vehiculo: int = Field(..., gt=0)
+    descripcion: str = Field(..., min_length=10, max_length=1000)
+    ubicacion_lat: Optional[float] = Field(None, ge=-90, le=90)
+    ubicacion_long: Optional[float] = Field(None, ge=-180, le=180)
+    evidencias: List[EvidenciaCreate] = Field(default_factory=list)
 
 
-@dataclass
-class IncidenteResponse:
+class IncidenteResponse(BaseModel):
     """Esquema de respuesta para Incidente"""
     id_incidente: int
     id_vehiculo: int
-    id_cliente: int
+    id_usuario: int
     descripcion: str
     estado: str
     prioridad: str
@@ -80,8 +63,9 @@ class IncidenteResponse:
     fecha_reporte: datetime
     fecha_actualizacion: datetime
 
+    model_config = ConfigDict(from_attributes=True)
 
-@dataclass
+
 class IncidenteDetailedResponse(IncidenteResponse):
     """
     Incidente con información completa incluyendo:
@@ -89,23 +73,21 @@ class IncidenteDetailedResponse(IncidenteResponse):
     - Información del cliente
     - Lista completa de evidencias
     """
-    evidencias: List[EvidenciaResponse] = field(default_factory=list)
+    evidencias: List[EvidenciaResponse] = Field(default_factory=list)
 
 
-@dataclass
-class IncidenteListResponse:
+class IncidenteListResponse(BaseModel):
     """Respuesta para lista de incidentes del usuario"""
-    total: int
-    incidentes: List[IncidenteDetailedResponse] = field(default_factory=list)
+    total: int = Field(..., ge=0)
+    incidentes: List[IncidenteDetailedResponse] = Field(default_factory=list)
 
 
-@dataclass
-class TriajeAIResponse:
-    """
-    Respuesta del sistema de Triaje IA
-    (Placeholder para lógica futura de priorización automática)
-    """
-    id_incidente: int
-    prioridad_asignada: str
-    razon_prioridad: str
-    tiempo_respuesta_estimado_minutos: int
+class TriajeAIResponse(BaseModel):
+    """Esquema para la respuesta del análisis de IA"""
+    nivel_prioridad: str
+    diagnostico_presuntivo: str
+    recomendaciones: List[str]
+    taller_sugerido_id: Optional[int] = None
+
+    # Esto es vital para que FastAPI pueda leer objetos de la DB
+    model_config = ConfigDict(from_attributes=True)

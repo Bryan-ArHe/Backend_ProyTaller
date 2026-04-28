@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, status, HTTPException, Request
 from sqlalchemy.orm import Session
 from typing import List
 from models.database import get_db
-from models.user import Cliente
+from models.user import Usuario
 from dependencies import get_current_user
 from schemas.user import UsuarioResponse
 from utils.bitacora_helper import registrar_evento_bitacora
@@ -58,18 +58,7 @@ def listar_mis_vehiculos(
         print(f"📍 GET /vehiculos - Listando vehículos del usuario")
         print(f"   Usuario ID: {current_user.id_usuario}")
         
-        # Obtener el Cliente asociado al Usuario autenticado
-        cliente = db.query(Cliente).filter(Cliente.id_usuario == current_user.id_usuario).first()
-        if not cliente:
-            print(f"❌ No se encontró cliente para usuario {current_user.id_usuario}")
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="El usuario actual no tiene un perfil de cliente."
-            )
-        
-        print(f"   Cliente ID: {cliente.id_cliente}")
-        
-        vehiculos_orm = obtener_vehiculos_por_cliente(db, cliente.id_cliente, skip=skip, limit=limit)
+        vehiculos_orm = obtener_vehiculos_por_cliente(db, current_user.id_usuario, skip=skip, limit=limit)
         print(f"   Total de vehículos encontrados: {len(vehiculos_orm)}")
         
         # Convertir ORM objects a modelos Pydantic (JSON serializable)
@@ -123,7 +112,7 @@ def obtener_mi_vehiculo(
     vehiculo = obtener_vehiculo_por_id(db, id_vehiculo)
     
     # Obtener el Cliente asociado al Usuario autenticado
-    cliente = db.query(Cliente).filter(Cliente.id_usuario == current_user.id_usuario).first()
+    cliente = db.query(Usuario).filter(Usuario.id_usuario == current_user.id_usuario).first()
     if not cliente:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -131,7 +120,7 @@ def obtener_mi_vehiculo(
         )
     
     # Validar propiedad (RBAC)
-    if vehiculo.id_cliente != cliente.id_cliente:
+    if vehiculo.id_usuario != current_user.id_usuario:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No tiene permiso para acceder a este vehículo"
@@ -148,11 +137,10 @@ def registrar_vehiculo(
     db: Session = Depends(get_db)
 ):
     """
-    Registra un nuevo vehículo para el usuario autenticado (cliente)
+    Registra un nuevo vehículo para el usuario autenticado
     
     Validaciones:
         - La placa debe ser única en el sistema
-        - El usuario debe ser un cliente registrado
         - El usuario debe estar activo
     
     Request Body:
@@ -165,16 +153,8 @@ def registrar_vehiculo(
     Returns:
         Vehículo creado con su ID
     """
-    # Obtener el registro Cliente asociado al Usuario autenticado
-    cliente = db.query(Cliente).filter(Cliente.id_usuario == current_user.id_usuario).first()
-    if not cliente:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="El usuario actual no tiene un perfil de cliente. Solo clientes pueden registrar vehículos."
-        )
-    
-    # Crear el vehículo con el id_cliente correcto
-    vehiculo = crear_vehiculo(db, cliente.id_cliente, datos)
+    # Crear el vehículo con el id_usuario correcto
+    vehiculo = crear_vehiculo(db, current_user.id_usuario, datos)
     
     # Registrar evento CREATE en bitácora
     registrar_evento_bitacora(
@@ -217,7 +197,7 @@ def actualizar_mi_vehiculo(
         Vehículo actualizado
     """
     # Obtener el Cliente asociado al Usuario autenticado
-    cliente = db.query(Cliente).filter(Cliente.id_usuario == current_user.id_usuario).first()
+    cliente = db.query(Usuario).filter(Usuario.id_usuario == current_user.id_usuario).first()
     if not cliente:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -234,7 +214,7 @@ def actualizar_mi_vehiculo(
     if datos.anio:
         cambios.append(f"año={vehiculo_anterior.anio}→{datos.anio}")
     
-    vehiculo = actualizar_vehiculo(db, id_vehiculo, cliente.id_cliente, datos)
+    vehiculo = actualizar_vehiculo(db, id_vehiculo, current_user.id_usuario, datos)
     
     # Registrar evento UPDATE en bitácora
     registrar_evento_bitacora(
@@ -271,7 +251,7 @@ def eliminar_mi_vehiculo(
         204 No Content si fue exitoso
     """
     # Obtener el Cliente asociado al Usuario autenticado
-    cliente = db.query(Cliente).filter(Cliente.id_usuario == current_user.id_usuario).first()
+    cliente = db.query(Usuario).filter(Usuario.id_usuario == current_user.id_usuario).first()
     if not cliente:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -282,7 +262,7 @@ def eliminar_mi_vehiculo(
     vehiculo = obtener_vehiculo_por_id(db, id_vehiculo)
     placa = vehiculo.placa
     
-    eliminar_vehiculo(db, id_vehiculo, cliente.id_cliente)
+    eliminar_vehiculo(db, id_vehiculo, current_user.id_usuario)
     
     # Registrar evento DELETE en bitácora
     registrar_evento_bitacora(
@@ -316,7 +296,7 @@ def verificar_disponibilidad_vehiculo(
     vehiculo = obtener_vehiculo_por_id(db, id_vehiculo)
     
     # Obtener el Cliente asociado al Usuario autenticado
-    cliente = db.query(Cliente).filter(Cliente.id_usuario == current_user.id_usuario).first()
+    cliente = db.query(Usuario).filter(Usuario.id_usuario == current_user.id_usuario).first()
     if not cliente:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

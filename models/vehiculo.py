@@ -1,6 +1,6 @@
 """
 models/vehiculo.py - Modelo para Vehículos
-Relaciona Marca/Modelo con Cliente (Usuario) para la gestión de vehículos
+Relaciona Marca/Modelo con Usuario para la gestión de vehículos
 """
 
 from sqlalchemy import Column, Integer, String, ForeignKey, DateTime
@@ -11,15 +11,14 @@ from datetime import datetime
 
 class Vehiculo(Base):
     """
-    Modelo Vehiculo - Representa los vehículos registrados por clientes
+    Modelo Vehiculo - Representa los vehículos registrados por usuarios
     Relaciones:
-        - Muchos-a-Uno con Cliente (propietario)
-        - Muchos-a-Uno con Modelo (referencia técnica)
+        - Muchos-a-Uno con Usuario (propietario)
         - Uno-a-Muchos con Incidente (historial de incidentes)
     
     Atributos:
-        id: Identificador único del vehículo
-        id_cliente: Clave foránea al Cliente (propietario)
+        id_vehiculo: Identificador único del vehículo
+        id_usuario: Clave foránea al Usuario (propietario)
         placa: Placa de registro único del vehículo
         marca: Marca del vehículo
         modelo: Modelo del vehículo
@@ -30,7 +29,7 @@ class Vehiculo(Base):
     __tablename__ = "vehiculo"
     
     id_vehiculo = Column(Integer, primary_key=True, index=True)
-    id_cliente = Column(Integer, ForeignKey("cliente.id_cliente"), nullable=False, index=True)
+    id_usuario = Column(Integer, ForeignKey("usuario.id_usuario", ondelete="CASCADE"), nullable=False, index=True)
     
     placa = Column(String(15), unique=True, nullable=False, index=True)
     marca = Column(String(60), nullable=False)
@@ -41,11 +40,11 @@ class Vehiculo(Base):
     fecha_registro = Column(DateTime, default=datetime.utcnow, nullable=False)
     
     # Relaciones
-    cliente = relationship("Cliente", back_populates="vehiculos")
-    incidentes = relationship("Incidente", back_populates="vehiculo", cascade="all, delete-orphan")
+    usuario = relationship("models.user.Usuario", foreign_keys=[id_usuario])
+    incidentes = relationship("models.incidente.Incidente", back_populates="vehiculo", cascade="all, delete-orphan")
     
     def __repr__(self):
-        return f"<Vehiculo(id={self.id}, placa='{self.placa}', cliente_id={self.id_cliente})>"
+        return f"<Vehiculo(id={self.id_vehiculo}, placa='{self.placa}', usuario_id={self.id_usuario})>"
 
 
 # Importar al final para resolver relaciones sin circular imports

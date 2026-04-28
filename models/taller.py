@@ -4,7 +4,7 @@ from models.database import Base
 from sqlalchemy.orm import relationship
 
 class Taller(Base):
-    __tablename__ = "talleres"
+    __tablename__ = "taller"
 
     # Campos existentes en tu imagen
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)

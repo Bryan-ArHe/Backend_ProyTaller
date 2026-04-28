@@ -38,20 +38,14 @@ class TipoEvidencia(str, enum.Enum):
 class Incidente(Base):
     """
     Modelo Incidente - Registro de emergencias vehiculares
-    
-    Atributos:
-        id: Identificador único del incidente
-        id_cliente: Clave foránea al cliente que reporta
-        id_vehiculo: Clave foránea al vehículo involucrado
-        fecha_incidente: Fecha y hora del incidente
-        latitud: Coordenada de latitud GPS
-        longitud: Coordenada de longitud GPS
-        estado_incidente: Estado actual del incidente
+    Actualizado para usar la tabla 'usuario' en lugar de 'cliente'
     """
     __tablename__ = "incidente"
     
     id_incidente = Column(Integer, primary_key=True, index=True)
-    id_cliente = Column(Integer, ForeignKey("cliente.id_cliente"), nullable=True, index=True)
+    
+    # 1. CAMBIO CLAVE: Apunta a 'usuario.id_usuario'
+    id_usuario = Column(Integer, ForeignKey("usuario.id_usuario"), nullable=True, index=True)
     id_vehiculo = Column(Integer, ForeignKey("vehiculo.id_vehiculo"), nullable=True, index=True)
     
     fecha_incidente = Column(DateTime, default=datetime.utcnow, nullable=False)
@@ -59,19 +53,17 @@ class Incidente(Base):
     longitud = Column(Numeric(10, 7), nullable=False)
     estado_incidente = Column(String(30), default="PENDIENTE", nullable=False)
     
-    # Relaciones
-    cliente = relationship("Cliente", back_populates="incidentes")
+    # 2. CAMBIO CLAVE: Relación con el nuevo modelo de Usuario
+    # Usamos el string completo para evitar errores de carga
+    cliente = relationship("models.user.Usuario", back_populates="incidentes")
+    
     vehiculo = relationship("Vehiculo", back_populates="incidentes")
     evidencias = relationship("Evidencia", back_populates="incidente", cascade="all, delete-orphan")
     triaje = relationship("TriajeIA", back_populates="incidente", uselist=False, cascade="all, delete-orphan")
     historial = relationship("HistorialIncidente", back_populates="incidente", cascade="all, delete-orphan")
-    solicitud_servicio = relationship("SolicitudServicio", back_populates="incidente", uselist=False)
-    asignaciones_candidato = relationship("AsignacionCandidato", back_populates="incidente", cascade="all, delete-orphan")
-
     
     def __repr__(self):
-        return f"<Incidente(id={self.id}, estado={self.estado_incidente}, latitud={self.latitud}, longitud={self.longitud})>"
-
+        return f"<Incidente(id={self.id_incidente}, estado={self.estado_incidente})>"
 
 class Evidencia(Base):
     """
@@ -188,7 +180,7 @@ class MensajeInApp(Base):
     fecha_envio = Column(DateTime, default=datetime.utcnow, nullable=False)
     
     # Relaciones
-    solicitud_servicio = relationship("SolicitudServicio", back_populates="mensajes")
+    #solicitud_servicio = relationship("SolicitudServicio", back_populates="mensajes")
     
     def __repr__(self):
         return f"<MensajeInApp(id={self.id}, emisor={self.emisor}, fecha={self.fecha_envio})>"
