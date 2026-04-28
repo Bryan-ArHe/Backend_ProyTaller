@@ -166,45 +166,12 @@ class GestorTaller(Base):
     
     # Relaciones
     usuario = relationship("Usuario", back_populates="gestor_taller")
-    tecnicos = relationship("Tecnico", back_populates="gestor_taller", cascade="all, delete-orphan")
+    #tecnicos = relationship("Tecnico", back_populates="gestor_taller", cascade="all, delete-orphan")
     repuestos = relationship("Repuesto", back_populates="gestor_taller", cascade="all, delete-orphan")
     asignaciones_candidato = relationship("AsignacionCandidato", back_populates="gestor_taller")
     
     def __repr__(self):
         return f"<GestorTaller(id={self.id}, razon_social='{self.razon_social}', nit='{self.nit}')>"
-
-
-class Tecnico(Base):
-    """
-    Modelo Técnico - Operador en campo que atiende emergencias
-    Hereda de Usuario (relación 1-a-1)
-    Pertenece a un GestorTaller (relación muchos-a-1)
-    
-    Atributos:
-        id: Identificador único del técnico
-        id_usuario: Clave foránea única a Usuario
-        id_taller: Clave foránea al gestor/taller al que pertenece
-        nombres: Nombres del técnico
-        especialidad: Especialidad técnica (ej: electricidad, mecánica, etc.)
-        esta_disponible: Flag que indica si está disponible para asignaciones
-    """
-    __tablename__ = "tecnico"
-    
-    id_tecnico = Column(Integer, primary_key=True, index=True)
-    id_usuario = Column(Integer, ForeignKey("usuario.id_usuario", ondelete="CASCADE"), unique=True, nullable=False, index=True)
-    id_taller = Column(Integer, ForeignKey("gestores_taller.id_taller"), nullable=True, index=True)
-    nombres = Column(String(150), nullable=False)
-    especialidad = Column(String(100), nullable=True)
-    esta_disponible = Column(Integer, default=1, nullable=False)  # 1=True, 0=False para SQL Server
-    
-    # Relaciones
-    usuario = relationship("Usuario", back_populates="tecnico")
-    gestor_taller = relationship("GestorTaller", back_populates="tecnicos")
-    solicitudes_servicio = relationship("SolicitudServicio", back_populates="tecnico")
-    ubicaciones_tracking = relationship("UbicacionTracking", back_populates="tecnico", cascade="all, delete-orphan")
-    
-    def __repr__(self):
-        return f"<Tecnico(id={self.id}, nombres='{self.nombres}', especialidad='{self.especialidad}')>"
 
 
 class NotificacionPush(Base):
