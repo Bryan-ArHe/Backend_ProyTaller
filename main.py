@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from config import get_settings
 from models.database import engine, Base
-from routers import auth, dashboard, vehiculos, incidentes, usuarios, roles, bitacora
+from routers import auth, dashboard, vehiculos, incidentes, usuarios, roles, bitacora, talleres
 
 # Importar todos los modelos para que SQLAlchemy los reconozca en metadata
 # IMPORTANTE: Estos imports son necesarios para que Base.metadata.create_all() funcione
@@ -148,7 +148,10 @@ app.include_router(vehiculos.router)
 app.include_router(incidentes.router)
 
 # Router de Bitácora - Registro de eventos y auditoría
-app.include_router(bitacora.route)
+app.include_router(bitacora.router)
+
+# Router de Talleres - Gestión de talleres
+app.include_router(talleres.router)
 
 
 # Endpoint raíz para verificar que la API está activa

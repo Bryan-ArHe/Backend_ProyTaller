@@ -8,9 +8,9 @@ from dependencies import get_current_user
 from crud import bitacora as crud_bitacora
 from typing import List
 
-route = APIRouter( prefix="/bitacora", tags=["Bitácora"])
+router = APIRouter( prefix="/bitacora", tags=["Bitácora"])
 
-@route.get("/", response_model=List[BitacoraResponse])
+@router.get("/", response_model=List[BitacoraResponse])
 def listar_bitacora(
     tipo: str = None,
     user_id: int = None,
