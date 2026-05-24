@@ -102,7 +102,7 @@ Content-Type: {{contentType}}
 
 {
   "email": "tecnico@example.com",
-  "password": "TestPassword123!"
+  "password": "123456"
 }
 
 ### 8. Login exitoso - Admin
@@ -111,7 +111,7 @@ Content-Type: {{contentType}}
 
 {
   "email": "admin@example.com",
-  "password": "TestPassword123!"
+  "password": "123456"
 }
 
 ### 9. Error: Contraseña incorrecta

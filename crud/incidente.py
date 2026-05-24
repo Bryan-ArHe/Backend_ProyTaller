@@ -157,35 +157,33 @@ def obtener_incidente_por_id(db: Session, id_incidente: int) -> Incidente:
     return incidente
 
 
-def obtener_incidentes_por_cliente(db: Session, id_cliente: int, skip: int = 0, limit: int = 100) -> list:
+def obtener_incidentes_por_cliente(db: Session, id_usuario: int, skip: int = 0, limit: int = 100) -> list:
     """
-    Obtiene todos los incidentes reportados por un cliente
+    Obtiene todos los incidentes reportados por un usuario
     Implementa RBAC: el usuario solo ve sus propios incidentes
     """
     return db.query(Incidente).filter(
-        Incidente.id_cliente == id_cliente
-    ).order_by(Incidente.fecha_reporte.desc()).offset(skip).limit(limit).all()
+        Incidente.id_usuario == id_usuario
+    ).order_by(Incidente.fecha_incidente.desc()).offset(skip).limit(limit).all()
 
 
 def obtener_incidentes_por_vehiculo(db: Session, id_vehiculo: int) -> list:
     """Obtiene el historial de incidentes de un vehículo específico"""
     return db.query(Incidente).filter(
         Incidente.id_vehiculo == id_vehiculo
-    ).order_by(Incidente.fecha_reporte.desc()).all()
+    ).order_by(Incidente.fecha_incidente.desc()).all()
 
 
 def obtener_incidentes_por_estado(db: Session, estado: str, skip: int = 0, limit: int = 100) -> list:
     """Obtiene incidentes filtrados por estado (para operadores/admin)"""
     return db.query(Incidente).filter(
-        Incidente.estado == estado
-    ).order_by(Incidente.fecha_reporte.desc()).offset(skip).limit(limit).all()
+        Incidente.estado_incidente == estado
+    ).order_by(Incidente.fecha_incidente.desc()).offset(skip).limit(limit).all()
 
 
 def obtener_incidentes_por_prioridad(db: Session, prioridad: str, skip: int = 0, limit: int = 100) -> list:
     """Obtiene incidentes filtrados por prioridad (para operadores/admin)"""
-    return db.query(Incidente).filter(
-        Incidente.prioridad == prioridad
-    ).order_by(Incidente.fecha_reporte.desc()).offset(skip).limit(limit).all()
+    return db.query(Incidente).order_by(Incidente.fecha_incidente.desc()).offset(skip).limit(limit).all()
 
 
 def actualizar_estado_incidente(db: Session, id_incidente: int, nuevo_estado: str) -> Incidente:

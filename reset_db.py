@@ -1,280 +1,278 @@
 ﻿# -*- coding: utf-8 -*-
+"""
+reset_db.py - Script para reiniciar la base de datos y cargar datos de prueba
+Uso: python reset_db.py
+"""
 import sys
 from sqlalchemy import text
 from models.database import SessionLocal, engine, Base
-from models.user import Usuario, Rol, Permiso, EstadoCuenta, Cliente, GestorTaller, Tecnico
+from models.user import Usuario, Rol, Permiso, EstadoCuenta
+from models.taller import Taller
+from models.tecnico import Tecnico
 from models.vehiculo import Vehiculo
-from models.incidente import Incidente, Evidencia, TriajeIA, HistorialIncidente, MensajeInApp
+from models.incidente import Incidente
 from models.bitacora import Bitacora
-from models.despacho import SolicitudServicio, AsignacionCandidato, Repuesto, DetalleServicio, UbicacionTracking, Pago, Comision, Calificacion
+from models.solicitud import SolicitudServicio
 from security.password import hash_password
 
-# Este script se usa para reiniciar la base de datos (eliminar y crear tablas) y cargar datos de prueba
-"""
-def reset_database():
-    print('Eliminando todas las tablas...')
-    # Eliminar con CASCADE para quitar tipos ENUM y dependencias
-    with engine.connect() as conn:
-        pass # Original line modified
-        pass
-        pass
-    Base.metadata.drop_all(bind=engine)
-    print('Tablas eliminadas')
-    print('Creando nuevas tablas...')
-    Base.metadata.create_all(bind=engine)
-    print('Tablas creadas')
-"""
 
 def reset_database():
-    print('Eliminando todas las tablas y limpiando esquema...')
-    # Usamos DROP SCHEMA CASCADE para asegurar una limpieza total en PostgreSQL/Supabase
-    with engine.connect() as conn:
-        conn.execute(text("DROP SCHEMA public CASCADE;"))
-        conn.execute(text("CREATE SCHEMA public;"))
-        conn.execute(text("GRANT ALL ON SCHEMA public TO postgres;"))
-        conn.execute(text("GRANT ALL ON SCHEMA public TO public;"))
-        conn.commit()
-    print('Tablas eliminadas y esquema recreado')
+    """Elimina y recrea todas las tablas (optimizado para PostgreSQL)"""
+    print('🗑️  Eliminando todas las tablas y limpiando esquema...')
     
-    print('Creando nuevas tablas desde los modelos...')
-    # SQLAlchemy creará de nuevo la estructura definida en tus modelos
+    with engine.connect() as conn:
+        # Para PostgreSQL: usar DROP SCHEMA CASCADE para limpieza total
+        try:
+            print('   - Eliminando schema public (y todos sus objetos)...')
+            conn.execute(text("DROP SCHEMA public CASCADE;"))
+            conn.commit()
+            print('   ✓ Schema eliminado')
+        except Exception as e:
+            print(f'   ⚠️  Schema no existía o error: {e}')
+            conn.rollback()
+        
+        # Recrear el schema public
+        try:
+            print('   - Creando schema public...')
+            conn.execute(text("CREATE SCHEMA public;"))
+            print('   - Asignando permisos...')
+            conn.execute(text("GRANT ALL ON SCHEMA public TO postgres;"))
+            conn.execute(text("GRANT ALL ON SCHEMA public TO public;"))
+            conn.commit()
+            print('   ✓ Schema recreado con permisos')
+        except Exception as e:
+            print(f'   ⚠️  Error recreando schema: {e}')
+            conn.rollback()
+    
+    print('🏗️  Creando nuevas tablas desde los modelos...')
     Base.metadata.create_all(bind=engine)
-    print('Tablas creadas correctamente')
+    print('✅ Tablas creadas correctamente')
+
 
 def create_test_data():
+    """Crea datos de prueba: roles, permisos, usuarios y talleres"""
     db = SessionLocal()
     try:
-        print('Creando roles...')
-        roles = [Rol(nombre='admin', descripcion='Administrador'), Rol(nombre='tecnico', descripcion='Tecnico'), Rol(nombre='cliente', descripcion='Cliente'), Rol(nombre='gestor_taller', descripcion='Gestor')]
-        for r in roles: db.add(r)
+        print('\n📋 CREANDO ROLES...')
+        roles_data = [
+            Rol(nombre='Administrador', descripcion='Administrador del sistema con acceso completo'),
+            Rol(nombre='Tecnico', descripcion='Técnico de taller para atención de emergencias'),
+            Rol(nombre='Cliente', descripcion='Cliente/Usuario final para reportar incidentes'),
+            Rol(nombre='GestorTaller', descripcion='Gestor de taller para administrar recursos'),
+        ]
+        for r in roles_data:
+            db.add(r)
         db.commit()
+        print(f'   ✓ {len(roles_data)} roles creados')
         
         # Obtener IDs de roles
-        admin_rol = db.query(Rol).filter(Rol.nombre == 'admin').first()
-        tecnico_rol = db.query(Rol).filter(Rol.nombre == 'tecnico').first()
-        cliente_rol = db.query(Rol).filter(Rol.nombre == 'cliente').first()
-        gestor_rol = db.query(Rol).filter(Rol.nombre == 'gestor_taller').first()
+        admin_rol = db.query(Rol).filter(Rol.nombre == 'Administrador').first()
+        tecnico_rol = db.query(Rol).filter(Rol.nombre == 'Tecnico').first()
+        cliente_rol = db.query(Rol).filter(Rol.nombre == 'Cliente').first()
+        gestor_rol = db.query(Rol).filter(Rol.nombre == 'GestorTaller').first()
         
-        print('Creando permisos...')
+        print('\n🔐 CREANDO PERMISOS...')
         permisos = [
-            # ========== USUARIOS ==========
+            # USUARIOS
             Permiso(nombre='crear_usuario', descripcion='Crear nuevo usuario', recurso='usuario', accion='crear'),
             Permiso(nombre='leer_usuario', descripcion='Ver detalles del usuario', recurso='usuario', accion='leer'),
             Permiso(nombre='actualizar_usuario', descripcion='Actualizar datos del usuario', recurso='usuario', accion='actualizar'),
             Permiso(nombre='eliminar_usuario', descripcion='Eliminar usuario', recurso='usuario', accion='eliminar'),
-            Permiso(nombre='cambiar_rol_usuario', descripcion='Cambiar rol de un usuario', recurso='usuario', accion='cambiar_rol'),
-            Permiso(nombre='cambiar_estado_usuario', descripcion='Cambiar estado (ACTIVO/INACTIVO) de usuario', recurso='usuario', accion='cambiar_estado'),
-            Permiso(nombre='listar_usuarios', descripcion='Listar todos los usuarios del sistema', recurso='usuario', accion='listar'),
             
-            # ========== ROLES ==========
-            Permiso(nombre='crear_rol', descripcion='Crear nuevo rol', recurso='rol', accion='crear'),
-            Permiso(nombre='leer_rol', descripcion='Ver detalles del rol', recurso='rol', accion='leer'),
-            Permiso(nombre='actualizar_rol', descripcion='Actualizar rol', recurso='rol', accion='actualizar'),
-            Permiso(nombre='eliminar_rol', descripcion='Eliminar rol', recurso='rol', accion='eliminar'),
-            Permiso(nombre='gestionar_rol', descripcion='Gestionar roles del sistema', recurso='rol', accion='gestionar'),
-            
-            # ========== PERMISOS ==========
-            Permiso(nombre='crear_permiso', descripcion='Crear nuevo permiso', recurso='permiso', accion='crear'),
-            Permiso(nombre='leer_permiso', descripcion='Ver detalles del permiso', recurso='permiso', accion='leer'),
-            Permiso(nombre='actualizar_permiso', descripcion='Actualizar permiso', recurso='permiso', accion='actualizar'),
-            Permiso(nombre='eliminar_permiso', descripcion='Eliminar permiso', recurso='permiso', accion='eliminar'),
-            Permiso(nombre='gestionar_permiso', descripcion='Gestionar permisos del sistema', recurso='permiso', accion='gestionar'),
-            
-            # ========== VEHÍCULOS ==========
+            # VEHÍCULOS
             Permiso(nombre='crear_vehiculo', descripcion='Registrar nuevo vehículo', recurso='vehiculo', accion='crear'),
             Permiso(nombre='leer_vehiculo', descripcion='Ver detalles del vehículo', recurso='vehiculo', accion='leer'),
             Permiso(nombre='actualizar_vehiculo', descripcion='Actualizar información del vehículo', recurso='vehiculo', accion='actualizar'),
             Permiso(nombre='eliminar_vehiculo', descripcion='Eliminar vehículo', recurso='vehiculo', accion='eliminar'),
-            Permiso(nombre='listar_vehiculos', descripcion='Listar vehículos', recurso='vehiculo', accion='listar'),
             
-            # ========== MARCAS Y MODELOS ==========
-            Permiso(nombre='crear_marca', descripcion='Crear nueva marca de vehículo', recurso='marca', accion='crear'),
-            Permiso(nombre='leer_marca', descripcion='Ver detalles de marca', recurso='marca', accion='leer'),
-            Permiso(nombre='actualizar_marca', descripcion='Actualizar marca', recurso='marca', accion='actualizar'),
-            Permiso(nombre='eliminar_marca', descripcion='Eliminar marca', recurso='marca', accion='eliminar'),
-            Permiso(nombre='crear_modelo', descripcion='Crear nuevo modelo de vehículo', recurso='modelo', accion='crear'),
-            Permiso(nombre='leer_modelo', descripcion='Ver detalles del modelo', recurso='modelo', accion='leer'),
-            Permiso(nombre='actualizar_modelo', descripcion='Actualizar modelo', recurso='modelo', accion='actualizar'),
-            Permiso(nombre='eliminar_modelo', descripcion='Eliminar modelo', recurso='modelo', accion='eliminar'),
-            
-            # ========== INCIDENTES ==========
+            # INCIDENTES
             Permiso(nombre='crear_incidente', descripcion='Crear nuevo incidente/emergencia', recurso='incidente', accion='crear'),
             Permiso(nombre='leer_incidente', descripcion='Ver detalles del incidente', recurso='incidente', accion='leer'),
             Permiso(nombre='actualizar_incidente', descripcion='Actualizar incidente', recurso='incidente', accion='actualizar'),
             Permiso(nombre='eliminar_incidente', descripcion='Eliminar incidente', recurso='incidente', accion='eliminar'),
-            Permiso(nombre='listar_incidentes', descripcion='Listar incidentes', recurso='incidente', accion='listar'),
-            Permiso(nombre='asignar_incidente', descripcion='Asignar incidente a técnico', recurso='incidente', accion='asignar'),
             
-            # ========== EVIDENCIA ==========
-            Permiso(nombre='crear_evidencia', descripcion='Capturar evidencia multimedia', recurso='evidencia', accion='crear'),
-            Permiso(nombre='leer_evidencia', descripcion='Ver evidencia', recurso='evidencia', accion='leer'),
-            Permiso(nombre='eliminar_evidencia', descripcion='Eliminar evidencia', recurso='evidencia', accion='eliminar'),
-            
-            # ========== DESPACHO Y SOLICITUDES DE SERVICIO ==========
+            # SOLICITUDES DE SERVICIO
             Permiso(nombre='crear_solicitud_servicio', descripcion='Crear solicitud de servicio', recurso='solicitud_servicio', accion='crear'),
             Permiso(nombre='leer_solicitud_servicio', descripcion='Ver solicitud de servicio', recurso='solicitud_servicio', accion='leer'),
             Permiso(nombre='actualizar_solicitud_servicio', descripcion='Actualizar solicitud de servicio', recurso='solicitud_servicio', accion='actualizar'),
-            Permiso(nombre='eliminar_solicitud_servicio', descripcion='Eliminar solicitud de servicio', recurso='solicitud_servicio', accion='eliminar'),
             Permiso(nombre='asignar_tecnico', descripcion='Asignar técnico a solicitud', recurso='solicitud_servicio', accion='asignar'),
             
-            # ========== REPUESTOS ==========
-            Permiso(nombre='crear_repuesto', descripcion='Crear repuesto/parte', recurso='repuesto', accion='crear'),
-            Permiso(nombre='leer_repuesto', descripcion='Ver detalles del repuesto', recurso='repuesto', accion='leer'),
-            Permiso(nombre='actualizar_repuesto', descripcion='Actualizar repuesto', recurso='repuesto', accion='actualizar'),
-            Permiso(nombre='eliminar_repuesto', descripcion='Eliminar repuesto', recurso='repuesto', accion='eliminar'),
+            # BITÁCORA
+            Permiso(nombre='leer_bitacora', descripcion='Ver bitácora de auditoría', recurso='bitacora', accion='leer'),
             
-            # ========== PAGOS ==========
-            Permiso(nombre='crear_pago', descripcion='Registrar pago', recurso='pago', accion='crear'),
-            Permiso(nombre='leer_pago', descripcion='Ver detalles del pago', recurso='pago', accion='leer'),
-            Permiso(nombre='actualizar_pago', descripcion='Actualizar estado del pago', recurso='pago', accion='actualizar'),
-            Permiso(nombre='eliminar_pago', descripcion='Eliminar pago', recurso='pago', accion='eliminar'),
-            
-            # ========== COMISIONES ==========
-            Permiso(nombre='crear_comision', descripcion='Crear comisión', recurso='comision', accion='crear'),
-            Permiso(nombre='leer_comision', descripcion='Ver detalles de comisión', recurso='comision', accion='leer'),
-            Permiso(nombre='actualizar_comision', descripcion='Actualizar comisión', recurso='comision', accion='actualizar'),
-            Permiso(nombre='eliminar_comision', descripcion='Eliminar comisión', recurso='comision', accion='eliminar'),
-            
-            # ========== CALIFICACIONES ==========
-            Permiso(nombre='crear_calificacion', descripcion='Crear calificación/reseña', recurso='calificacion', accion='crear'),
-            Permiso(nombre='leer_calificacion', descripcion='Ver calificación', recurso='calificacion', accion='leer'),
-            Permiso(nombre='eliminar_calificacion', descripcion='Eliminar calificación', recurso='calificacion', accion='eliminar'),
-            
-            # ========== TRACKING Y UBICACIÓN ==========
-            Permiso(nombre='crear_tracking', descripcion='Crear punto de tracking', recurso='tracking', accion='crear'),
-            Permiso(nombre='leer_tracking', descripcion='Ver ubicación en tiempo real', recurso='tracking', accion='leer'),
-            
-            # ========== DASHBOARD ==========
-            Permiso(nombre='ver_dashboard_admin', descripcion='Ver dashboard administrativo', recurso='dashboard', accion='ver_admin'),
-            Permiso(nombre='ver_dashboard_operador', descripcion='Ver dashboard de operador', recurso='dashboard', accion='ver_operador'),
-            Permiso(nombre='ver_dashboard_cliente', descripcion='Ver dashboard de cliente', recurso='dashboard', accion='ver_cliente'),
-            
-            # ========== MENSAJES Y NOTIFICACIONES ==========
-            Permiso(nombre='crear_mensaje', descripcion='Crear mensaje in-app', recurso='mensaje', accion='crear'),
-            Permiso(nombre='leer_mensaje', descripcion='Leer mensajes', recurso='mensaje', accion='leer'),
-            Permiso(nombre='eliminar_mensaje', descripcion='Eliminar mensaje', recurso='mensaje', accion='eliminar'),
-            Permiso(nombre='crear_notificacion', descripcion='Crear notificación push', recurso='notificacion', accion='crear'),
-            
-            # ========== REPORTES ==========
-            Permiso(nombre='generar_reporte', descripcion='Generar reportes del sistema', recurso='reporte', accion='generar'),
-            Permiso(nombre='descargar_reporte', descripcion='Descargar reportes', recurso='reporte', accion='descargar'),
-            
-            # ========== CONFIGURACIÓN DEL SISTEMA ==========
-            Permiso(nombre='ver_configuracion', descripcion='Ver configuración del sistema', recurso='configuracion', accion='ver'),
-            Permiso(nombre='editar_configuracion', descripcion='Editar configuración del sistema', recurso='configuracion', accion='editar'),
+            # DASHBOARD
+            Permiso(nombre='ver_dashboard', descripcion='Ver dashboard', recurso='dashboard', accion='ver'),
         ]
-        for p in permisos: db.add(p)
+        for p in permisos:
+            db.add(p)
         db.commit()
+        print(f'   ✓ {len(permisos)} permisos creados')
         
-        # ========== ASIGNAR PERMISOS A ROLES ==========
+        print('\n👥 ASIGNANDO PERMISOS A ROLES...')
+        # ADMINISTRADOR: todos los permisos
         all_permisos = db.query(Permiso).all()
-        
-        # ADMIN: Todos los permisos (superusuario con acceso total)
         admin_rol.permisos = all_permisos
         
-        # TECNICO: Permisos para ver y actualizar incidentes, solicitudes, tracking y calificar
+        # TÉCNICO: lectura y actualización de incidentes y solicitudes
         tecnico_permisos = db.query(Permiso).filter(
-            (Permiso.nombre.in_([
-                'leer_incidente', 'actualizar_incidente', 'listar_incidentes',
+            Permiso.nombre.in_([
+                'leer_incidente', 'actualizar_incidente',
                 'leer_solicitud_servicio', 'actualizar_solicitud_servicio',
-                'crear_tracking', 'leer_tracking',
-                'crear_calificacion', 'leer_calificacion',
-                'leer_evidencia', 'crear_evidencia',
-                'leer_usuario',  # Ver su propio perfil
-                'ver_dashboard_operador',
-                'leer_mensaje', 'crear_mensaje',
-                'leer_repuesto',
-            ]))
+                'leer_usuario', 'ver_dashboard',
+                'leer_bitacora',
+            ])
         ).all()
         tecnico_rol.permisos = tecnico_permisos
         
-        # CLIENTE: Permisos para crear incidentes, ver sus vehículos, ver su perfil
+        # CLIENTE: crear incidentes y vehículos, ver sus solicitudes
         cliente_permisos = db.query(Permiso).filter(
-            (Permiso.nombre.in_([
-                'crear_incidente', 'leer_incidente', 'listar_incidentes',
-                'crear_evidencia', 'leer_evidencia',
-                'crear_vehiculo', 'leer_vehiculo', 'listar_vehiculos', 'actualizar_vehiculo',
-                'crear_calificacion', 'leer_calificacion',
-                'leer_solicitud_servicio',
-                'leer_usuario',  # Ver su propio perfil
-                'ver_dashboard_cliente',
-                'leer_mensaje', 'crear_mensaje',
-                'leer_marca', 'leer_modelo',
-            ]))
+            Permiso.nombre.in_([
+                'crear_incidente', 'leer_incidente',
+                'crear_vehiculo', 'leer_vehiculo', 'actualizar_vehiculo',
+                'crear_solicitud_servicio', 'leer_solicitud_servicio',
+                'leer_usuario', 'ver_dashboard',
+            ])
         ).all()
         cliente_rol.permisos = cliente_permisos
         
-        # GESTOR_TALLER: Permisos para gestionar técnicos, vehículos, repuestos y solicitudes de servicio
+        # GESTOR TALLER: gestión completa de solicitudes, técnicos y vehículos
         gestor_permisos = db.query(Permiso).filter(
-            (Permiso.nombre.in_([
+            Permiso.nombre.in_([
                 'crear_usuario', 'leer_usuario', 'actualizar_usuario',
-                'crear_vehiculo', 'leer_vehiculo', 'actualizar_vehiculo', 'listar_vehiculos',
+                'crear_vehiculo', 'leer_vehiculo', 'actualizar_vehiculo',
                 'crear_solicitud_servicio', 'leer_solicitud_servicio', 'actualizar_solicitud_servicio', 'asignar_tecnico',
-                'crear_repuesto', 'leer_repuesto', 'actualizar_repuesto',
-                'crear_tracking', 'leer_tracking',
-                'leer_incidente', 'listar_incidentes',
-                'leer_usuario',  # Ver su propio perfil
-                'ver_dashboard_operador',
-                'leer_mensaje', 'crear_mensaje',
-                'crear_pago', 'leer_pago',
-                'crear_comision', 'leer_comision',
-                'generar_reporte',
-            ]))
+                'leer_incidente',
+                'ver_dashboard', 'leer_bitacora',
+            ])
         ).all()
         gestor_rol.permisos = gestor_permisos
         
         db.commit()
+        print('   ✓ Permisos asignados a roles')
         
-        print('Creando usuarios y actores...')
-        ph = hash_password('123456')
+        print('\n👤 CREANDO USUARIOS...')
+        password_hash = hash_password('123456')  # Contraseña por defecto: 123456 (truncada a 72 bytes)
         
-        # Usuario Admin
-        admin_user = Usuario(nombre='Admin', apellido='System', email='admin@example.com', telefono='3001', password_hash=ph, id_rol=admin_rol.id_rol, estado_cuenta=EstadoCuenta.ACTIVO)
-        db.add(admin_user)
-        db.flush()
+        usuarios_data = [
+            Usuario(
+                nombre='Admin',
+                apellido='System',
+                email='admin@example.com',
+                telefono='+1001',
+                password_hash=password_hash,
+                id_rol=admin_rol.id_rol,
+                estado_cuenta=EstadoCuenta.ACTIVO
+            ),
+            Usuario(
+                nombre='Carlos',
+                apellido='Ruiz',
+                email='tecnico@example.com',
+                telefono='+1002',
+                password_hash=password_hash,
+                id_rol=tecnico_rol.id_rol,
+                estado_cuenta=EstadoCuenta.ACTIVO
+            ),
+            Usuario(
+                nombre='Juan',
+                apellido='Pérez',
+                email='cliente@example.com',
+                telefono='+1003',
+                password_hash=password_hash,
+                id_rol=cliente_rol.id_rol,
+                estado_cuenta=EstadoCuenta.ACTIVO
+            ),
+            Usuario(
+                nombre='Roberto',
+                apellido='García',
+                email='gestor@example.com',
+                telefono='+1004',
+                password_hash=password_hash,
+                id_rol=gestor_rol.id_rol,
+                estado_cuenta=EstadoCuenta.ACTIVO
+            ),
+        ]
         
-        # Usuario Técnico
-        tecnico_user = Usuario(nombre='Carlos', apellido='Ruiz', email='tecnico@example.com', telefono='3003', password_hash=ph, id_rol=tecnico_rol.id_rol, estado_cuenta=EstadoCuenta.ACTIVO)
-        db.add(tecnico_user)
-        db.flush()
-        
-        # Usuario Cliente
-        cliente_user = Usuario(nombre='Juan', apellido='Pérez', email='cliente@example.com', telefono='3004', password_hash=ph, id_rol=cliente_rol.id_rol, estado_cuenta=EstadoCuenta.ACTIVO)
-        db.add(cliente_user)
-        db.flush()
-        
-        # Usuario Gestor de Taller
-        gestor_user = Usuario(nombre='Roberto', apellido='García', email='gestor_taller@example.com', telefono='3005', password_hash=ph, id_rol=gestor_rol.id_rol, estado_cuenta=EstadoCuenta.ACTIVO)
-        db.add(gestor_user)
-        db.flush()
-        
-        # Crear instancias de Cliente, Gestor y Técnico
-        cliente = Cliente(id_usuario=cliente_user.id_usuario, ci='1234567890', fecha_nacimiento='1990-05-15')
-        db.add(cliente)
-        db.flush()
-        
-        gestor = GestorTaller(id_usuario=gestor_user.id_usuario, razon_social='Taller Mecánico El Ejecutivo', nit='900123456', direccion='Cra 7 #25-80')
-        db.add(gestor)
-        db.flush()
-        
-        tecnico = Tecnico(id_usuario=tecnico_user.id_usuario, id_taller=gestor.id_taller, nombres='Carlos Ruiz', especialidad='Mecánica', esta_disponible=1)
-        db.add(tecnico)
-        db.flush()
-        
+        for u in usuarios_data:
+            db.add(u)
         db.commit()
-        print('Datos creados exitosamente')
+        print(f'   ✓ {len(usuarios_data)} usuarios creados')
+        print('   Credenciales: email/password123')
+        
+        print('\n🏭 CREANDO TALLERES...')
+        # Obtener usuario admin como propietario
+        admin_user = db.query(Usuario).filter(Usuario.email == 'admin@example.com').first()
+        
+        talleres_data = [
+            Taller(
+                nombre='Taller Central',
+                direccion='Cra 7 #25-80, Bogotá',
+                telefono='+57 1 2345678',
+                id_propietario=admin_user.id_usuario,
+                especialidad='Mecánica General',
+                capacidad_vehiculos=5,
+                estado_activo=True
+            ),
+            Taller(
+                nombre='Taller Oriente',
+                direccion='Cra 50 #45-20, Bogotá',
+                telefono='+57 1 9876543',
+                id_propietario=admin_user.id_usuario,
+                especialidad='Eléctrica',
+                capacidad_vehiculos=3,
+                estado_activo=True
+            ),
+        ]
+        
+        for t in talleres_data:
+            db.add(t)
+        db.commit()
+        print(f'   ✓ {len(talleres_data)} talleres creados')
+        
+        print('\n🔧 CREANDO TÉCNICOS...')
+        # Obtener usuarios técnicos
+        tecnico_user = db.query(Usuario).filter(Usuario.email == 'tecnico@example.com').first()
+        talleres = db.query(Taller).all()
+        
+        if tecnico_user and talleres:
+            tecnico = Tecnico(
+                id_usuario=tecnico_user.id_usuario,
+                id_taller=talleres[0].id,
+                especialidad='Mecánica General',
+                estado_disponibilidad='Libre'
+            )
+            db.add(tecnico)
+            db.commit()
+            print('   ✓ 1 técnico creado')
+        
+        print('\n✨ Base de datos inicializada exitosamente')
+        print('\n📝 RESUMEN:')
+        print(f'   - {len(roles_data)} Roles')
+        print(f'   - {len(permisos)} Permisos')
+        print(f'   - {len(usuarios_data)} Usuarios')
+        print(f'   - {len(talleres_data)} Talleres')
+        print(f'   - 1 Técnico')
+        
     except Exception as e:
         db.rollback()
-        print('Error:', e)
+        print(f'\n❌ Error al crear datos: {e}')
+        import traceback
+        traceback.print_exc()
         raise
     finally:
         db.close()
 
+
 if __name__ == '__main__':
     try:
+        print('=' * 60)
+        print('🔄 REINICIANDO BASE DE DATOS')
+        print('=' * 60)
         reset_database()
         create_test_data()
-        print('? Base de datos inicializada correctamente')
+        print('=' * 60)
+        print('✅ PROCESO COMPLETADO EXITOSAMENTE')
+        print('=' * 60)
     except Exception as e:
-        print('Error:', e)
+        print(f'\n❌ Error fatal: {e}')
+        sys.exit(1)
 

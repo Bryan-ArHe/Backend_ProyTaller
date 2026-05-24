@@ -12,10 +12,10 @@ class Bitacora(Base):
     evento = Column(String(20), nullable=False)
     recurso = Column(String(50), nullable=False)
     accion = Column(String(255), nullable=False)
-    ip = Column(String(50), nullable=False)
-    endpoint = Column(String(100), nullable=False)
-    payload = Column(Text, nullable=True)
+    ip = Column(String(50), nullable=True)
     fecha = Column(DateTime, default=datetime.utcnow, index=True)
     dispositivo = Column(String(10), nullable=True)
 
-    usuario = relationship("Usuario", back_populates="bitacoras")
+    usuario = relationship("models.user.Usuario", back_populates="bitacoras")
+    def __repr__(self):
+        return f"<Bitacora(id={self.id_bitacora}, accion='{self.accion}', usuario={self.id_usuario})>"

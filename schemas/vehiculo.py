@@ -7,7 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional, List
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from .validators import validate_string_length, validate_year
 
 
@@ -69,7 +69,7 @@ class VehiculoResponse:
 class VehiculoResponsePydantic(BaseModel):
     """Modelo Pydantic para respuesta de Vehículo (para serialización JSON)"""
     id_vehiculo: int
-    id_cliente: int
+    id_usuario: int
     marca: str
     modelo: str
     placa: str
@@ -77,11 +77,7 @@ class VehiculoResponsePydantic(BaseModel):
     anio: Optional[int] = None
     fecha_registro: datetime
     
-    class Config:
-        from_attributes = True  # Permite convertir desde ORM objects
-        json_encoders = {
-            datetime: lambda v: v.isoformat() if v else None
-        }
+    model_config = ConfigDict(from_attributes=True)
 
 
 class VehiculoListResponsePydantic(BaseModel):

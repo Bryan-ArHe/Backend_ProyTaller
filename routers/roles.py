@@ -12,8 +12,7 @@ from schemas.user import (
     PermisoResponse,
     ActualizarPermisosRequest,
 )
-from schemas.converters import orm_to_dataclass
-from dependencies import get_current_user
+from auth.dependencies import get_current_user
 from crud import roles as crud_roles
 from typing import List
 
@@ -270,20 +269,8 @@ def actualizar_permisos_rol(
             -H "Content-Type: application/json" \\
             -d '{"permisos_ids": [1, 2, 5, 7]}'
     """
-    # Obtener el usuario actual de la BD con su rol
-    usuario = db.query(Usuario).filter(
-        Usuario.id_usuario == current_user.id_usuario
-    ).first()
-    
-    if not usuario:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Usuario no encontrado"
-        )
-    
     # Validar que sea administrador
-    # Buscar el rol del usuario en la BD
-    if usuario.rol.nombre.lower() != "admin":
+    if current_user.rol.nombre != "Administrador":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Solo administradores pueden actualizar permisos de roles"

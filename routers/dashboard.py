@@ -15,7 +15,7 @@ from schemas.dashboard import (
     DashboardTecnicoResponse,
     DashboardGenericoResponse,
 )
-from dependencies import get_current_user
+from auth.dependencies import get_current_user
 from schemas.user import UsuarioResponse
 
 # Crear el router del dashboard
@@ -50,46 +50,52 @@ def obtener_metricas_dashboard(
         HTTPException 401: Si el token es inválido
         HTTPException 403: Si el usuario es inactivo
     """
-    
-    # El usuario ya fue validado por get_current_user
-    rol_nombre = current_user.rol.nombre.lower()
-    
-    # ==========================================
-    # MÉTRICAS PARA ADMIN
-    # ==========================================
-    if rol_nombre == "admin":
-        return _obtener_metricas_admin(db)
-    
-    # ==========================================
-    # MÉTRICAS PARA OPERADOR
-    # ==========================================
-    elif rol_nombre == "operador":
-        return _obtener_metricas_operador(db, current_user)
-    
-    # ==========================================
-    # MÉTRICAS PARA USUARIO (Cliente)
-    # ==========================================
-    elif rol_nombre == "usuario":
-        return _obtener_metricas_usuario(db, current_user)
-    
-    # ==========================================
-    # MÉTRICAS PARA TÉCNICO
-    # ==========================================
-    elif rol_nombre == "tecnico":
-        return _obtener_metricas_tecnico(db, current_user)
-    
-    # ==========================================
-    # RESPUESTA GENÉRICA PARA ROLES DESCONOCIDOS
-    # ==========================================
-    else:
+    try:
+        # El usuario ya fue validado por get_current_user
+        rol_nombre = current_user.rol.nombre
+        
+        # ==========================================
+        # MÉTRICAS PARA ADMIN
+        # ==========================================
+        if rol_nombre == "Administrador":
+            return _obtener_metricas_admin(db)
+        
+        # ==========================================
+        # MÉTRICAS PARA OPERADOR
+        # ==========================================
+        elif rol_nombre == "Operador":
+            return _obtener_metricas_operador(db, current_user)
+        
+        # ==========================================
+        # MÉTRICAS PARA USUARIO (Cliente)
+        # ==========================================
+        elif rol_nombre == "Cliente":
+            return _obtener_metricas_usuario(db, current_user)
+        
+        # ==========================================
+        # MÉTRICAS PARA TÉCNICO
+        # ==========================================
+        elif rol_nombre == "Tecnico":
+            return _obtener_metricas_tecnico(db, current_user)
+        
+        # ==========================================
+        # RESPUESTA GENÉRICA PARA ROLES DESCONOCIDOS
+        # ==========================================
+        else:
+            return DashboardGenericoResponse(
+                mensaje=f"Dashboard disponible para el rol: {rol_nombre}",
+                rol=rol_nombre,
+                datos={
+                    "usuario_id": current_user.id,
+                    "email": current_user.email,
+                    "fecha_ingreso": current_user.fecha_registro
+                }
+            )
+    except Exception as e:
         return DashboardGenericoResponse(
-            mensaje=f"Dashboard disponible para el rol: {rol_nombre}",
-            rol=rol_nombre,
-            datos={
-                "usuario_id": current_user.id,
-                "email": current_user.email,
-                "fecha_ingreso": current_user.fecha_registro
-            }
+            mensaje=f"Error cargando métricas: {str(e)}",
+            rol="error",
+            datos={"error_details": str(type(e).__name__)}
         )
 
 

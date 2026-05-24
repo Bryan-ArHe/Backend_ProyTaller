@@ -11,15 +11,13 @@ from routers import auth, dashboard, vehiculos, incidentes, usuarios, roles, bit
 
 # Importar todos los modelos para que SQLAlchemy los reconozca en metadata
 # IMPORTANTE: Estos imports son necesarios para que Base.metadata.create_all() funcione
-from models.user import Usuario, Rol, Permiso, Cliente, GestorTaller, NotificacionPush
+from models.user import Usuario, Rol, Permiso
 from models.tecnico import Tecnico
+from models.taller import Taller
 from models.vehiculo import Vehiculo
+from models.solicitud import SolicitudServicio
 from models.incidente import Incidente, Evidencia, TriajeIA, HistorialIncidente, MensajeInApp
 from models.bitacora import Bitacora
-from models.despacho import (
-    SolicitudServicio, AsignacionCandidato, Repuesto, DetalleServicio,
-    UbicacionTracking, Pago, Comision, Calificacion
-)
 
 # Obtener configuración
 settings = get_settings()
@@ -95,10 +93,10 @@ def _create_default_roles():
     try:
         # Definir roles por defecto
         roles_default = [
-            {"nombre": "admin", "descripcion": "Administrador del sistema - Acceso completo"},
-            {"nombre": "tecnico", "descripcion": "Técnico de taller - Atención de usuarios"},
-            {"nombre": "cliente", "descripcion": "Cliente/Usuario final - Reporte de incidentes"},
-            {"nombre": "gestor_taller", "descripcion": "Gestor de taller - Administración de recursos"},
+            {"nombre": "Administrador", "descripcion": "Administrador del sistema - Acceso completo"},
+            {"nombre": "Tecnico", "descripcion": "Técnico de taller - Atención de usuarios"},
+            {"nombre": "Cliente", "descripcion": "Cliente/Usuario final - Reporte de incidentes"},
+            {"nombre": "GestorTaller", "descripcion": "Gestor de taller - Administración de recursos"},
         ]
         
         # Crear roles si no existen

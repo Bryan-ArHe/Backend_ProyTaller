@@ -1,25 +1,25 @@
+# routers/auth.py
 """
-routers/auth.py - Router con los endpoints de autenticación
-Incluye: registro, login y obtención de datos del usuario autenticado
+Router de Autenticación - Refactorizado sin passlib
+Usa security/password.py para la verificación de contraseñas con bcrypt
 """
 
-import re
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
-from dataclasses import dataclass, field
-from models.bitacora import Bitacora
 from models.database import get_db
-from models.user import Usuario, Rol, EstadoCuenta
-from schemas.user import UsuarioCreate, UsuarioResponse, LoginData, Token
-from schemas.converters import orm_to_dataclass
-from security.password import hash_password, verify_password
+from models.user import Usuario
 from security.jwt_handler import create_access_token
-from dependencies import get_current_user
-from config import get_settings
+from security.password import verify_password
+from schemas.user import UsuarioCreate, UsuarioResponse, Token
+from crud.usuarios import get_usuario_by_email
+from crud.auth import crear_usuario
+from auth.dependencies import get_current_user
+from fastapi.security import OAuth2PasswordRequestForm
 from utils.bitacora_helper import registrar_evento_bitacora
-from typing import List
+import logging
 
-# Crear el router de autenticación
+logger = logging.getLogger(__name__)
+
 router = APIRouter(
     prefix="/auth",
     tags=["Autenticación"],
@@ -31,409 +31,142 @@ router = APIRouter(
 )
 
 
-@router.post("/register", response_model=UsuarioResponse, status_code=status.HTTP_201_CREATED)
-def register(usuario_data: UsuarioCreate, request: Request, db: Session = Depends(get_db)):
-    # 1. Verificar que el email no esté registrado
-    usuario_existente = db.query(Usuario).filter(
-        Usuario.email == usuario_data.email
-    ).first()
+@router.post("/register", response_model=UsuarioResponse, status_code=201)
+def registrar_usuario(request: Request, usuario: UsuarioCreate, db: Session = Depends(get_db)):
+    """
+    Endpoint de registro de nuevo usuario.
     
-    if usuario_existente:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El email ya está registrado"
-        )
+    - **email**: Debe ser único en el sistema
+    - **password**: Se hashea automáticamente con bcrypt
+    - **id_rol**: ID del rol del usuario
+    - **telefono**: Número de contacto
+    """
+    # 1. Verificar si el email ya existe
+    db_user = get_usuario_by_email(db, email=usuario.email)
+    if db_user:
+        logger.warning(f"⚠️ Intento de registro con email duplicado: {usuario.email}")
+        raise HTTPException(status_code=400, detail="El correo ya está registrado")
     
-    # 2. Verificar que el rol exista
-    rol = db.query(Rol).filter(Rol.id_rol == usuario_data.id_rol).first()
-    if not rol:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"El rol con ID {usuario_data.id_rol} no existe"
-        )
+    # 2. Crear el usuario
+    nuevo_usuario = crear_usuario(db=db, usuario_in=usuario)
+    logger.info(f"✅ Usuario registrado: {usuario.email} con rol ID: {usuario.id_rol}")
     
-    # 3. Hashear la contraseña
-    password_hash = hash_password(usuario_data.password)
-    
-    # 4. Crear el nuevo usuario
-    nuevo_usuario = Usuario(
-        nombre=usuario_data.nombre,
-        apellido=usuario_data.apellido,
-        email=usuario_data.email,
-        telefono=usuario_data.telefono,
-        password_hash=password_hash,
-        id_rol=usuario_data.id_rol,
-        estado_cuenta=EstadoCuenta.ACTIVO
-    )
-    
-    # 5. Guardar en la base de datos
-    db.add(nuevo_usuario)
-    db.flush()  # Flush para obtener el ID antes de commit
-    
-    # 6. Registrar evento CREATE en bitácora
+    # Registrar en bitácora
     registrar_evento_bitacora(
         db=db,
         request=request,
         id_usuario=nuevo_usuario.id_usuario,
         nombre_usuario=f"{nuevo_usuario.nombre} {nuevo_usuario.apellido}",
-        evento="CREATE",
-        recurso="USUARIO",
-        accion=f"Nuevo usuario registrado: {nuevo_usuario.email}"
+        evento="REGISTRO",
+        recurso="usuario",
+        accion=f"Nuevo usuario registrado: {usuario.email}"
     )
     
-    db.commit()
-    db.refresh(nuevo_usuario)
-    
-    return orm_to_dataclass(nuevo_usuario, UsuarioResponse)
+    return nuevo_usuario
 
-
-import re
-from fastapi import APIRouter, Depends, HTTPException, status, Request
-from sqlalchemy.orm import Session
-# Asegúrate de tener tus imports correctos aquí
 
 @router.post("/login", response_model=Token)
-def login(credenciales: LoginData, request: Request, db: Session = Depends(get_db)):
-    # 1. Buscar usuario por email
-    usuario = db.query(Usuario).filter(
-        Usuario.email == credenciales.email
-    ).first()
+def login(
+    request: Request,
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db)
+):
+    """
+    Login endpoint - Autenticación con email y contraseña.
     
-    if not usuario:
+    **Parámetros:**
+    - **username**: Email del usuario
+    - **password**: Contraseña en texto plano
+    
+    **Validaciones:**
+    - Usuario debe existir
+    - Contraseña debe ser correcta (validada con bcrypt)
+    - Usuario debe estar ACTIVO
+    - Clientes y técnicos NO pueden acceder vía web (bloqueo de acceso)
+    
+    **Retorna:**
+    - Token JWT con datos del usuario
+    """
+    email = form_data.username
+    
+    logger.info(f"🔐 Intento de login: {email}")
+    
+    # 1. Buscar el usuario por email
+    user = get_usuario_by_email(db, email=email)
+    
+    if not user:
+        logger.warning(f"❌ Usuario no encontrado: {email}")
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Email o contraseña incorrectos",
-            headers={"WWW-Authenticate": "Bearer"},
+            status_code=401,
+            detail="Credenciales incorrectas"
         )
     
-    # 2. Verificar contraseña
-    if not verify_password(credenciales.password, usuario.password_hash):
+    # 2. Verificar contraseña usando bcrypt (sin passlib)
+    if not verify_password(form_data.password, user.password_hash):
+        logger.warning(f"❌ Contraseña incorrecta para: {email}")
+        registrar_evento_bitacora(
+            db=db,
+            request=request,
+            id_usuario=user.id_usuario,
+            nombre_usuario=f"{user.nombre} {user.apellido}",
+            evento="LOGIN",
+            recurso="autenticacion",
+            accion="Intento de login fallido - contraseña incorrecta"
+        )
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Email o contraseña incorrectos",
-            headers={"WWW-Authenticate": "Bearer"},
+            status_code=401,
+            detail="Credenciales incorrectas"
         )
     
-    # 3. Verificar que la cuenta esté activa
-    if usuario.estado_cuenta == EstadoCuenta.INACTIVO:
+    # 3. Verificar que el usuario esté activo
+    if user.estado_cuenta.value == "INACTIVO":
+        logger.warning(f"❌ Usuario inactivo intenta login: {email}")
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="La cuenta de este usuario está inactiva"
+            status_code=401,
+            detail="Usuario inactivo. Contacte al administrador."
         )
     
-    # --- DETECCIÓN DE DISPOSITIVO ---
-    ua = request.headers.get("user-agent", "").lower()
-    es_movil = bool(re.search(r"mobile|android|iphone|ipad", ua))
-    # Usamos minúsculas para mantener consistencia y evitar bugs
-    tipo_dispositivo = "mobile" if es_movil else "web" 
-
-    # --- REGLA DE NEGOCIO ---
-    # Roles: 2 = Cliente, 3 = Técnico 
-    if usuario.id_rol in [2, 3] and tipo_dispositivo == "web":
-        # Bloqueamos el acceso porque intentan entrar desde PC
+    # 4. Bloqueo de acceso web para clientes y técnicos
+    rol_nombre = user.rol.nombre.lower()
+    if rol_nombre in ["cliente", "tecnico"]:
+        logger.warning(f"❌ Acceso web bloqueado para rol '{rol_nombre}': {email}")
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Acceso denegado. Los clientes y técnicos solo pueden ingresar mediante la aplicación móvil."
+            status_code=403,
+            detail="Tu rol no tiene acceso a esta plataforma web. Usa la aplicación móvil."
         )
-
-    # --- REGISTRO EN BITÁCORA ---
+    
+    # 5. Generar token JWT
+    logger.info(f"✅ Login exitoso: {email} (Rol: {user.rol.nombre})")
+    
+    access_token = create_access_token(
+        data={
+            "sub": user.email,
+            "id_usuario": user.id_usuario,
+            "rol": user.rol.nombre
+        }
+    )
+    
+    # Registrar en bitácora
     registrar_evento_bitacora(
         db=db,
         request=request,
-        id_usuario=usuario.id_usuario,
-        nombre_usuario=f"{usuario.nombre} {usuario.apellido}",
+        id_usuario=user.id_usuario,
+        nombre_usuario=f"{user.nombre} {user.apellido}",
         evento="LOGIN",
-        recurso="AUTENTICACION",
-        accion=f"Usuario {usuario.email} inició sesión",
-        dispositivo=tipo_dispositivo
+        recurso="autenticacion",
+        accion="Login exitoso"
     )
-
-    # --- GENERAR TOKEN ---
-    access_token = create_access_token(data={"sub": usuario.email})
     
     return {"access_token": access_token, "token_type": "bearer"}
 
 
 @router.get("/me", response_model=UsuarioResponse)
-def get_current_user_info(current_user: UsuarioResponse = Depends(get_current_user)):
+def leer_mi_perfil(current_user: Usuario = Depends(get_current_user)):
     """
-    Endpoint para obtener los datos del usuario autenticado.
+    Obtener datos del usuario autenticado.
     
-    **Seguridad:**
-    - Requiere un token JWT válido en el header Authorization
-    - Solo retorna los datos del usuario autenticado
+    **Requiere:** Token JWT válido en header `Authorization: Bearer <token>`
     
-    Args:
-        current_user: Usuario autenticado (inyectado por la dependencia)
-        
-    Returns:
-        UsuarioResponse: Datos del usuario autenticado
-        
-    Raises:
-        HTTPException 401: Si el token es inválido o expirado
-        HTTPException 403: Si la cuenta está inactiva
-        
-    Ejemplo de request:
-        GET /auth/me
-        Headers:
-            Authorization: Bearer <token_jwt>
+    **Retorna:** Perfil completo del usuario autenticado
     """
     return current_user
-
-
-@router.post("/logout", status_code=status.HTTP_200_OK)
-def logout(
-    request: Request,
-    current_user: UsuarioResponse = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Endpoint para registrar el logout de un usuario.
-    
-    **Descripción:**
-    - Registra el evento de logout en la bitácora
-    - Requiere token JWT válido para confirmar la identidad del usuario
-    - El logout en sí es cliente-side (eliminar token), esto solo registra el evento
-    
-    **Seguridad:**
-    - Requiere un token JWT válido en el header Authorization
-    
-    **Respuesta:**
-    ```json
-    {
-        "mensaje": "Sesión cerrada exitosamente",
-        "email": "usuario@example.com"
-    }
-    ```
-    
-    **Errores:**
-        - 401 Unauthorized: Token inválido o expirado
-        - 403 Forbidden: Cuenta inactiva
-    
-    **Ejemplo:**
-        POST /auth/logout
-        Headers:
-            Authorization: Bearer <token_jwt>
-    
-    Returns:
-        dict: Mensaje de éxito y email del usuario
-    """
-    try:
-        # Registrar evento LOGOUT en bitácora
-        registrar_evento_bitacora(
-            db=db,
-            request=request,
-            id_usuario=current_user.id_usuario,
-            nombre_usuario=f"{current_user.nombre} {current_user.apellido}",
-            evento="LOGOUT",
-            recurso="AUTENTICACION",
-            accion="Usuario cerró sesión"
-        )
-        
-        return {
-            "mensaje": "Sesión cerrada exitosamente",
-            "email": current_user.email
-        }
-    except Exception as e:
-        # Log del error pero retornar éxito igual (logout es operación no-crítica)
-        print(f"Error al registrar logout: {str(e)}")
-        return {
-            "mensaje": "Sesión cerrada (registro no disponible)",
-            "email": current_user.email
-        }
-
-
-# ============================================================================
-# ESQUEMAS PARA SEED DATA
-# ============================================================================
-
-@dataclass
-class UsuarioTestData:
-    """Esquema para datos de usuario de prueba con credenciales"""
-    email: str
-    password: str
-    telefono: str
-    id_rol: int
-    rol_nombre: str
-    descripcion: str
-
-
-@dataclass
-class SeedDataResponse:
-    """Respuesta del endpoint de seed con lista de usuarios creados"""
-    mensaje: str
-    total_usuarios_creados: int
-    usuarios: List[UsuarioTestData] = field(default_factory=list)
-
-
-# ============================================================================
-# ENDPOINT: GENERAR DATOS DE PRUEBA
-# ============================================================================
-
-@router.post("/seed-test-users", response_model=SeedDataResponse, status_code=201)
-def seed_test_users(db: Session = Depends(get_db)):
-    """
-    Endpoint para generar usuarios de prueba con todos los roles del sistema.
-    
-    ⚠️ **SOLO DISPONIBLE EN MODO DEBUG**
-    
-    Este endpoint crea automáticamente 5 usuarios de prueba, uno para cada rol:
-    - Admin: Administrador del sistema (acceso completo)
-    - Operador: Operador de emergencias (gestión de incidentes)
-    - Técnico: Técnico de taller (atención de usuarios)
-    - Cliente: Usuario final (reporte de incidentes)
-    - Gestor Taller: Gestor de taller (admin de recursos)
-    
-    **Validaciones:**
-    - Solo funciona si DEBUG_MODE=True en config
-    - Valida que los usuarios no existan antes de crearlos
-    - Si un usuario ya existe, lo omite
-    - Devuelve lista de usuarios creados con sus credenciales
-    
-    **Respuesta:**
-    ```json
-    {
-        "mensaje": "Usuarios de prueba creados exitosamente",
-        "total_usuarios_creados": 5,
-        "usuarios": [
-            {
-                "email": "admin@example.com",
-                "password": "TestPassword123!",
-                "telefono": "3001111111",
-                "id_rol": 1,
-                "rol_nombre": "admin",
-                "descripcion": "Admin del sistema"
-            },
-            ...
-        ]
-    }
-    ```
-    
-    Returns:
-        SeedDataResponse: Mensaje de éxito y lista de usuarios creados con credenciales
-        
-    Raises:
-        HTTPException 403: Si DEBUG_MODE está deshabilitado (no es desarrollo)
-        HTTPException 400: Si ocurre un error al crear usuarios
-        
-    Ejemplo de request:
-        POST /auth/seed-test-users
-        (Sin body, no requiere autenticación)
-    """
-    # Obtener config
-    settings = get_settings()
-    
-    # Verificar que el endpoint solo está disponible en modo debug
-    if not settings.debug_mode:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="El endpoint /auth/seed-test-users solo está disponible en modo DEBUG. "
-                   "Habilita DEBUG_MODE=True en .env para modo desarrollo."
-        )
-    
-    # Definir usuarios de prueba
-    usuarios_prueba = [
-        {
-            "email": "admin@example.com",
-            "password": "TestPassword123!",
-            "telefono": "3001111111",
-            "id_rol": 1,
-            "rol_nombre": "admin",
-            "descripcion": "Admin del sistema - Acceso completo"
-        },
-        {
-            "email": "operador@example.com",
-            "password": "TestPassword123!",
-            "telefono": "3002222222",
-            "id_rol": 2,
-            "rol_nombre": "operador",
-            "descripcion": "Operador de emergencias - Gestión de incidentes"
-        },
-        {
-            "email": "tecnico@example.com",
-            "password": "TestPassword123!",
-            "telefono": "3003333333",
-            "id_rol": 3,
-            "rol_nombre": "tecnico",
-            "descripcion": "Técnico de taller - Atención de usuarios"
-        },
-        {
-            "email": "cliente@example.com",
-            "password": "TestPassword123!",
-            "telefono": "3004444444",
-            "id_rol": 4,
-            "rol_nombre": "cliente",
-            "descripcion": "Cliente/Usuario final - Reporte de incidentes"
-        },
-        {
-            "email": "gestor_taller@example.com",
-            "password": "TestPassword123!",
-            "telefono": "3005555555",
-            "id_rol": 5,
-            "rol_nombre": "gestor_taller",
-            "descripcion": "Gestor de taller - Admin de recursos"
-        }
-    ]
-    
-    usuarios_creados = []
-    
-    try:
-        for usuario_data in usuarios_prueba:
-            # Verificar que el usuario no exista
-            usuario_existente = db.query(Usuario).filter(
-                Usuario.email == usuario_data["email"]
-            ).first()
-            
-            if usuario_existente:
-                print(f"⏭️  Usuario {usuario_data['email']} ya existe, omitiendo...")
-                continue
-            
-            # Verificar que el rol existe
-            rol = db.query(Rol).filter(Rol.id == usuario_data["id_rol"]).first()
-            if not rol:
-                print(f"⚠️  Rol {usuario_data['id_rol']} no existe, omitiendo usuario {usuario_data['email']}")
-                continue
-            
-            # Crear usuario
-            password_hash = hash_password(usuario_data["password"])
-            nuevo_usuario = Usuario(
-                email=usuario_data["email"],
-                telefono=usuario_data["telefono"],
-                password_hash=password_hash,
-                id_rol=usuario_data["id_rol"],
-                estado_cuenta=EstadoCuenta.ACTIVO
-            )
-            
-            db.add(nuevo_usuario)
-            db.flush()  # Flush para obtener el ID
-            
-            # Agregar a lista de creados (con credenciales)
-            usuarios_creados.append(
-                UsuarioTestData(
-                    email=usuario_data["email"],
-                    password=usuario_data["password"],  # Retornar la contraseña en texto plano SOLO para desarrollo
-                    telefono=usuario_data["telefono"],
-                    id_rol=usuario_data["id_rol"],
-                    rol_nombre=usuario_data["rol_nombre"],
-                    descripcion=usuario_data["descripcion"]
-                )
-            )
-            
-            print(f"✅ Usuario {usuario_data['email']} creado exitosamente")
-        
-        # Commit final
-        db.commit()
-        
-        return SeedDataResponse(
-            mensaje="Usuarios de prueba creados exitosamente. "
-                    "Usa estas credenciales para testear el sistema.",
-            total_usuarios_creados=len(usuarios_creados),
-            usuarios=usuarios_creados
-        )
-        
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Error al crear usuarios de prueba: {str(e)}"
-        )
