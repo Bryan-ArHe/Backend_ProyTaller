@@ -12,13 +12,11 @@ from schemas.user import (
     UsuarioUpdate,
     UsuarioCreate,
 )
-from schemas.converters import orm_to_dataclass
-from dependencies import get_current_user
+from auth.dependencies import get_current_user, check_permissions
 from crud import usuarios as crud_usuarios
 from utils.bitacora_helper import registrar_evento_bitacora
 from security.password import hash_password
 from typing import List
-from auth.dependencies import get_current_user, check_permissions
 
 # Crear el router de usuarios
 router = APIRouter(
@@ -30,21 +28,6 @@ router = APIRouter(
         404: {"description": "Usuario no encontrado"},
     }
 )
-
-
-@router.get("/", response_model=List[UsuarioResponse])
-def listar_usuarios(
-    skip: int = 0, 
-    limit: int = 100, 
-    db: Session = Depends(get_db),
-    current_user: Usuario = Depends(check_permissions("Administrador"))
-):
-    """
-    Lista todos los usuarios del sistema. 
-    Solo accesible para el Administrador.
-    """
-    usuarios = db.query(Usuario).offset(skip).limit(limit).all()
-    return usuarios
 
 
 @router.put("/me", response_model=UsuarioResponse)
@@ -93,7 +76,31 @@ def update_current_profile(
         accion=f"Actualizó su perfil: {', '.join(cambios) if cambios else 'sin cambios'}"
     )
     
-    return orm_to_dataclass(usuario_actualizado, UsuarioResponse)
+    return UsuarioResponse.model_validate(usuario_actualizado)
+
+
+@router.get("/me", response_model=UsuarioResponse)
+def get_current_profile(
+    current_user: UsuarioResponse = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Obtiene los datos del perfil del usuario autenticado.
+    
+    Retorna todos los datos del usuario actual incluyendo rol y permisos.
+    """
+    # Buscar el usuario actual en la BD con todas sus relaciones cargadas
+    usuario = db.query(Usuario).options(
+        joinedload(Usuario.rol)
+    ).filter(Usuario.id_usuario == current_user.id_usuario).first()
+    
+    if not usuario:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Usuario no encontrado"
+        )
+    
+    return UsuarioResponse.model_validate(usuario)
 
 
 @router.get("/", response_model=List[UsuarioResponse])
@@ -103,7 +110,7 @@ def list_all_users(
 ):
     
     # Verificar que el usuario actual sea administrador
-    if current_user.rol.nombre.lower() != "admin":
+    if current_user.rol.nombre != "Administrador":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Solo administradores pueden listar usuarios"
@@ -114,9 +121,9 @@ def list_all_users(
         joinedload(Usuario.rol)
     ).all()
     
-    # Convertir a UsuarioAdminResponse
+    # Convertir a UsuarioResponse
     return [
-        orm_to_dataclass(usuario, UsuarioResponse)
+        UsuarioResponse.model_validate(usuario)
         for usuario in usuarios
     ]
 
@@ -131,7 +138,7 @@ def update_user_estado(
 ):
     
     # Verificar que el usuario actual sea administrador
-    if current_user.rol.nombre.lower() != "admin":
+    if current_user.rol.nombre != "Administrador":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Solo administradores pueden cambiar el estado de usuarios"
@@ -181,7 +188,7 @@ def update_user_estado(
         joinedload(Usuario.rol)
     ).filter(Usuario.id_usuario == usuario_id).first()
     
-    return orm_to_dataclass(usuario, UsuarioResponse)
+    return UsuarioResponse.model_validate(usuario)
 
 
 @router.patch("/{usuario_id}/rol", response_model=UsuarioResponse)
@@ -194,7 +201,7 @@ def update_user_rol(
 ):
     
     # Verificar que el usuario actual sea administrador
-    if current_user.rol.nombre.lower() != "admin":
+    if current_user.rol.nombre != "Administrador":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Solo administradores pueden cambiar roles de usuarios"
@@ -245,14 +252,14 @@ def update_user_rol(
         joinedload(Usuario.rol)
     ).filter(Usuario.id_usuario == usuario_id).first()
     
-    return orm_to_dataclass(usuario, UsuarioResponse)
+    return UsuarioResponse.model_validate(usuario)
 
 
 # ============================================================================
 # ENDPOINTS: ADMINISTRACIÓN DE USUARIOS (SOLO ADMIN)
 # ============================================================================
 
-@router.post("", response_model=UsuarioResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=UsuarioResponse, status_code=status.HTTP_201_CREATED)
 def crear_usuario_admin(
     usuario_data: UsuarioCreate,
     request: Request,
@@ -260,7 +267,7 @@ def crear_usuario_admin(
     db: Session = Depends(get_db),
 ):
     # Verificar que el usuario actual sea administrador
-    if current_user.rol.nombre.lower() != "admin":
+    if current_user.rol.nombre != "Administrador":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Solo administradores pueden crear nuevos usuarios"
@@ -323,7 +330,7 @@ def crear_usuario_admin(
         joinedload(Usuario.rol)
     ).filter(Usuario.id_usuario == nuevo_usuario.id_usuario).first()
     
-    return orm_to_dataclass(nuevo_usuario, UsuarioResponse)
+    return UsuarioResponse.model_validate(nuevo_usuario)
 
 
 @router.put("/{usuario_id}", response_model=UsuarioResponse, status_code=status.HTTP_200_OK)
@@ -336,7 +343,7 @@ def actualizar_usuario_admin(
 ):
    
     # Verificar que el usuario actual sea administrador
-    if current_user.rol.nombre.lower() != "admin":
+    if current_user.rol.nombre != "Administrador":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Solo administradores pueden actualizar usuarios"
@@ -396,7 +403,7 @@ def actualizar_usuario_admin(
         joinedload(Usuario.rol)
     ).filter(Usuario.id_usuario == usuario_id).first()
     
-    return orm_to_dataclass(usuario, UsuarioResponse)
+    return UsuarioResponse.model_validate(usuario)
 
 
 @router.delete("/{usuario_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -408,7 +415,7 @@ def eliminar_usuario_admin(
 ):
     
     # Verificar que el usuario actual sea administrador
-    if current_user.rol.nombre.lower() != "admin":
+    if current_user.rol.nombre != "Administrador":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Solo administradores pueden eliminar usuarios"

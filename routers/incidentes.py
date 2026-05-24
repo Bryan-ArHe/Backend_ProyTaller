@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, status, HTTPException, Request
 from sqlalchemy.orm import Session
 from typing import List
 from models.database import get_db
-from dependencies import get_current_user
+from auth.dependencies import get_current_user, require_admin
 from schemas.user import UsuarioResponse
 from utils.bitacora_helper import registrar_evento_bitacora
 from schemas.incidente import (
@@ -121,11 +121,17 @@ def listar_mis_incidentes(
     Returns:
         Lista de incidentes del usuario con sus evidencias en orden descendente
     """
-    incidentes = obtener_incidentes_por_cliente(db, current_user.id, skip=skip, limit=limit)
-    return IncidenteListResponse(
-        total=len(incidentes),
-        incidentes=incidentes
-    )
+    try:
+        incidentes = obtener_incidentes_por_cliente(db, current_user.id_usuario, skip=skip, limit=limit)
+        return IncidenteListResponse(
+            total=len(incidentes),
+            incidentes=incidentes
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error cargando incidentes: {str(e)}"
+        )
 
 
 @router.get("/{id_incidente}", response_model=IncidenteDetailedResponse, status_code=200)
@@ -385,13 +391,13 @@ def actualizar_estado(
     id_incidente: int,
     nuevo_estado: str,
     request: Request,
-    current_user: UsuarioResponse = Depends(get_current_user),
+    current_user = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
     """
     Actualiza el estado de un incidente durante su ciclo de vida
     
-    ⚠️ Requiere rol OPERADOR o ADMIN
+    ⚠️ SOLO ADMIN puede cambiar el estado
     
     Flujo de estados:
     PENDIENTE → EN_TRIAJE → ASIGNADO → EN_ATENCION → RESUELTO
@@ -406,7 +412,6 @@ def actualizar_estado(
     Returns:
         Incidente con nuevo estado actualizado
     """
-    # En producción, validar que es operador/admin
     incidente_anterior = obtener_incidente_por_id(db, id_incidente)
     incidente = actualizar_estado_incidente(db, id_incidente, nuevo_estado)
     
@@ -429,13 +434,13 @@ def actualizar_prioridad(
     id_incidente: int,
     nueva_prioridad: str,
     request: Request,
-    current_user: UsuarioResponse = Depends(get_current_user),
+    current_user = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
     """
     Actualiza la prioridad de un incidente (ajuste manual por operador)
     
-    ⚠️ Requiere rol OPERADOR o ADMIN
+    ⚠️ SOLO ADMIN puede cambiar la prioridad
     
     Path Parameters:
         id_incidente: ID del incidente

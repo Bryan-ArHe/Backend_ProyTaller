@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from typing import List
 from models.database import get_db
 from models.user import Usuario
-from dependencies import get_current_user
+from auth.dependencies import get_current_user
 from schemas.user import UsuarioResponse
 from utils.bitacora_helper import registrar_evento_bitacora
 from schemas.vehiculo import (
@@ -17,7 +17,6 @@ from schemas.vehiculo import (
     VehiculoDetailedResponse, VehiculoListResponsePydantic,
     VehiculoResponsePydantic, VehiculoDetailedResponsePydantic
 )
-from schemas.converters import orm_to_dataclass
 from crud.vehiculo import (
     crear_vehiculo, obtener_vehiculo_por_id, obtener_vehiculos_por_cliente,
     actualizar_vehiculo, eliminar_vehiculo,
@@ -54,41 +53,22 @@ def listar_mis_vehiculos(
         Array de vehículos del usuario con información completa
     """
     try:
-        print(f"\n{'='*80}")
-        print(f"📍 GET /vehiculos - Listando vehículos del usuario")
-        print(f"   Usuario ID: {current_user.id_usuario}")
-        
         vehiculos_orm = obtener_vehiculos_por_cliente(db, current_user.id_usuario, skip=skip, limit=limit)
-        print(f"   Total de vehículos encontrados: {len(vehiculos_orm)}")
         
         # Convertir ORM objects a modelos Pydantic (JSON serializable)
         vehiculos_pydantic = []
-        for idx, v in enumerate(vehiculos_orm):
-            try:
-                v_pydantic = VehiculoResponsePydantic.from_orm(v)
-                vehiculos_pydantic.append(v_pydantic)
-                print(f"   ✅ Vehículo {idx+1} convertido: {v.placa}")
-            except Exception as conv_err:
-                print(f"   ❌ Error convirtiendo vehículo {idx+1}: {str(conv_err)}")
-                raise
+        for v in vehiculos_orm:
+            v_pydantic = VehiculoResponsePydantic.model_validate(v)
+            vehiculos_pydantic.append(v_pydantic)
         
-        print(f"   ✅ Retornando {len(vehiculos_pydantic)} vehículos como array")
-        print(f"{'='*80}\n")
         return vehiculos_pydantic
         
     except HTTPException:
         raise
     except Exception as e:
-        print(f"\n{'='*80}")
-        print(f"💥 ERROR EN GET /vehiculos")
-        print(f"   Tipo: {type(e).__name__}")
-        print(f"   Mensaje: {str(e)}")
-        import traceback
-        print(f"   Traceback: {traceback.format_exc()}")
-        print(f"{'='*80}\n")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error al cargar vehículos: {str(e)}"
+            detail=f"Error al cargar vehiculos: {str(e)}"
         )
 
 
@@ -126,7 +106,7 @@ def obtener_mi_vehiculo(
             detail="No tiene permiso para acceder a este vehículo"
         )
     
-    return VehiculoDetailedResponsePydantic.from_orm(vehiculo)
+    return VehiculoDetailedResponsePydantic.model_validate(vehiculo)
 
 
 @router.post("", response_model=VehiculoResponsePydantic, status_code=201)
@@ -167,7 +147,7 @@ def registrar_vehiculo(
         accion=f"Nuevo vehículo registrado: {datos.marca} {datos.modelo} (Placa: {datos.placa})"
     )
     
-    return VehiculoResponsePydantic.from_orm(vehiculo)
+    return VehiculoResponsePydantic.model_validate(vehiculo)
 
 
 @router.put("/{id_vehiculo}", response_model=VehiculoResponsePydantic, status_code=200)
@@ -227,7 +207,7 @@ def actualizar_mi_vehiculo(
         accion=f"Vehículo {vehiculo_anterior.placa} actualizado: {', '.join(cambios)}"
     )
     
-    return VehiculoResponsePydantic.from_orm(vehiculo)
+    return VehiculoResponsePydantic.model_validate(vehiculo)
 
 
 @router.delete("/{id_vehiculo}", status_code=204)

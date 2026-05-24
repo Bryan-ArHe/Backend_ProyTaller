@@ -93,10 +93,10 @@ def _create_default_roles():
     try:
         # Definir roles por defecto
         roles_default = [
-            {"nombre": "admin", "descripcion": "Administrador del sistema - Acceso completo"},
-            {"nombre": "tecnico", "descripcion": "Técnico de taller - Atención de usuarios"},
-            {"nombre": "cliente", "descripcion": "Cliente/Usuario final - Reporte de incidentes"},
-            {"nombre": "gestor_taller", "descripcion": "Gestor de taller - Administración de recursos"},
+            {"nombre": "Administrador", "descripcion": "Administrador del sistema - Acceso completo"},
+            {"nombre": "Tecnico", "descripcion": "Técnico de taller - Atención de usuarios"},
+            {"nombre": "Cliente", "descripcion": "Cliente/Usuario final - Reporte de incidentes"},
+            {"nombre": "GestorTaller", "descripcion": "Gestor de taller - Administración de recursos"},
         ]
         
         # Crear roles si no existen

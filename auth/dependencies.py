@@ -4,7 +4,12 @@ from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 from models.database import get_db
 from models.user import Usuario
-from auth.security import SECRET_KEY, ALGORITHM
+from config import get_settings
+
+# Usar la misma configuración que security/jwt_handler.py
+settings = get_settings()
+SECRET_KEY = settings.secret_key
+ALGORITHM = settings.algorithm
 
 # Esto le dice a FastAPI que busque el token en el Header "Authorization"
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
@@ -44,3 +49,16 @@ def check_permissions(required_role: str):
             )
         return current_user
     return role_checker
+
+def require_admin(current_user: Usuario = Depends(get_current_user)):
+    """
+    Dependencia para asegurar que SOLO admin puede acceder a un endpoint.
+    Uso en endpoints de modificación (POST, PUT, DELETE):
+        current_user: Usuario = Depends(require_admin)
+    """
+    if current_user.rol.nombre != "Administrador":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo administradores pueden realizar esta acción"
+        )
+    return current_user

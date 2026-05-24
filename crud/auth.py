@@ -1,20 +1,45 @@
 # crud/auth.py
+"""
+CRUD de autenticación - Refactorizado sin passlib
+Utiliza security/password.py para hasheo y verificación con bcrypt
+"""
+
 from sqlalchemy.orm import Session
 from models.user import Usuario
 from schemas.user import UsuarioCreate
-from passlib.context import CryptContext
-
-# Configuramos el hasher para las contraseñas
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+from security.password import hash_password
 
 def get_usuario_by_email(db: Session, email: str):
-    """Busca un usuario por email"""
+    """
+    Busca un usuario por email en la base de datos.
+    
+    Args:
+        db: Sesión de SQLAlchemy
+        email: Email del usuario a buscar
+        
+    Returns:
+        Usuario si existe, None en caso contrario
+    """
     return db.query(Usuario).filter(Usuario.email == email).first()
 
 def crear_usuario(db: Session, usuario_in: UsuarioCreate):
-    """Crea un nuevo usuario con contraseña hasheada"""
-    hashed_password = pwd_context.hash(usuario_in.password)
+    """
+    Crea un nuevo usuario con contraseña hasheada usando bcrypt.
     
+    Args:
+        db: Sesión de SQLAlchemy
+        usuario_in: Datos del usuario a crear (UsuarioCreate schema)
+        
+    Returns:
+        Usuario creado en la base de datos
+        
+    Raises:
+        ValueError: Si la contraseña excede 72 bytes (limitación de bcrypt)
+    """
+    # Hashear contraseña con bcrypt
+    hashed_password = hash_password(usuario_in.password)
+    
+    # Crear nuevo usuario
     db_usuario = Usuario(
         nombre=usuario_in.nombre,
         apellido=usuario_in.apellido,
@@ -23,11 +48,9 @@ def crear_usuario(db: Session, usuario_in: UsuarioCreate):
         password_hash=hashed_password,
         id_rol=usuario_in.id_rol
     )
+    
     db.add(db_usuario)
     db.commit()
     db.refresh(db_usuario)
+    
     return db_usuario
-
-def verificar_password(plain_password: str, hashed_password: str) -> bool:
-    """Verifica que la contraseña plana coincida con el hash"""
-    return pwd_context.verify(plain_password, hashed_password)

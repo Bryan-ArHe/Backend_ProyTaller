@@ -56,7 +56,7 @@ DATABASE_URL=postgresql://usuario:contraseña@localhost:5432/emergencias_db
 SECRET_KEY=tu_clave_secreta_segura_cambiar_en_produccion
 ```
 
-**Nota:** Asegúrate de que PostgreSQL esté instalado y corriendo, y que hayas creado la base de datos `emergencias_db`.
+**Nota:** Asegúrate de que PostgreSQL esté instalado y corriendo, y que hayas creado la base de datos `gestiontaller`.
 
 ### 4. Inicializar la base de datos
 

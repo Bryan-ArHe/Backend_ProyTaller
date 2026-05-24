@@ -151,7 +151,7 @@ def create_test_data():
         print('   ✓ Permisos asignados a roles')
         
         print('\n👤 CREANDO USUARIOS...')
-        password_hash = hash_password('password123')  # Contraseña por defecto: password123 (truncada a 72 bytes)
+        password_hash = hash_password('123456')  # Contraseña por defecto: 123456 (truncada a 72 bytes)
         
         usuarios_data = [
             Usuario(
