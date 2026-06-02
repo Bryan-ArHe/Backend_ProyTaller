@@ -39,10 +39,17 @@ class Settings:
             "Plataforma Inteligente de Atención de Emergencias Vehiculares"
         )
         self.api_version = os.getenv("API_VERSION", "1.0.0")
-        self.debug = os.getenv("DEBUG", "True").lower() == "true"
         
-        # Generación de datos de prueba
+        # Debug: Modo de depuración (para crear tablas automáticamente)
         self.debug_mode = os.getenv("DEBUG_MODE", "True").lower() == "true"
+        self.debug = self.debug_mode  # Alias para compatibilidad
+        
+        # CORS: Orígenes permitidos (separados por comas)
+        cors_origins_str = os.getenv(
+            "CORS_ORIGINS",
+            "http://localhost:4200,http://localhost:3000,http://localhost:8000"
+        )
+        self.cors_origins = [origin.strip() for origin in cors_origins_str.split(",")]
 
 
 @lru_cache()

@@ -32,15 +32,7 @@ app = FastAPI(
 # Configurar CORS ANTES de cualquier otro middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:4200",
-        "http://127.0.0.1:4200",
-        "http://localhost:3000",
-        "https://api.tudominio.com",
-        "http://localhost:8000",  # Para desarrollo local
-        "http://localhost:8001",
-        #"*",   Permitir todos los orígenes en desarrollo
-    ],
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
     allow_headers=[
@@ -62,25 +54,27 @@ def startup_event():
     """
     Se ejecuta al iniciar la aplicación.
     En modo DEBUG: Crea todas las tablas definidas en los modelos ORM si no existen.
-    En producción: Solo registra que la app está iniciada.
+    En producción: Solo registra que la app está iniciada (NO intenta conectar a BD).
     """
     print("🚀 Iniciando aplicación...")
+    print(f"📦 Modo DEBUG: {settings.debug_mode}")
     
-    # Solo crear tablas automáticamente en modo DEBUG
+    # IMPORTANTE: NO crear tablas en producción
+    # Las tablas deben crearse una vez localmente con reset_db.py
+    # Vercel puede no tener acceso a la BD en startup
+    
     if settings.debug_mode:
-        print("🔧 Modo DEBUG activado - Creando tablas de base de datos...")
+        print("🔧 Modo DEBUG activado - Intentando crear tablas...")
         try:
             Base.metadata.create_all(bind=engine)
             print("✅ Tablas de base de datos creadas/verificadas")
-            
-            # Crear roles por defecto si no existen
             _create_default_roles()
             print("✅ Roles por defecto creados/verificados")
         except Exception as e:
             print(f"⚠️ Error al crear tablas: {e}")
-            print("   En producción, asegúrate de haber ejecutado reset_db.py localmente")
+            print("   Continuando sin tablas (asegúrate de haber ejecutado reset_db.py)")
     else:
-        print("📦 Modo PRODUCCIÓN - Asumiendo BD ya inicializada")
+        print("✅ Modo PRODUCCIÓN - BD debe estar pre-inicializada con reset_db.py")
     
     print("✅ Aplicación lista!")
 
@@ -130,6 +124,34 @@ def _create_default_roles():
 def shutdown_event():
     """Se ejecuta al cerrar la aplicación"""
     print("🛑 Cerrando aplicación...")
+
+
+# ============================================================================
+# HEALTH CHECK ENDPOINT (sin dependencias de BD)
+# ============================================================================
+@app.get("/health", tags=["Health"])
+def health_check():
+    """
+    Endpoint de verificación de salud de la aplicación.
+    No requiere autenticación ni conexión a BD.
+    Vercel lo usa para verificar que la app está activa.
+    """
+    return {
+        "status": "healthy",
+        "service": "Plataforma Inteligente de Atención de Emergencias Vehiculares",
+        "version": settings.api_version
+    }
+
+
+@app.get("/", tags=["Info"])
+def root():
+    """Endpoint raíz - Información básica de la API"""
+    return {
+        "message": "Bienvenido a la API",
+        "docs": "/docs",
+        "redoc": "/redoc",
+        "health": "/health"
+    }
 
 
 # ============================================================================
