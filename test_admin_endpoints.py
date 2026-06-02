@@ -10,7 +10,7 @@ import sys
 # Configuración
 BASE_URL = "http://localhost:8000"
 ADMIN_EMAIL = "admin@example.com"
-ADMIN_PASSWORD = "123456"
+ADMIN_PASSWORD = "12345678"
 
 # Colores para terminal
 GREEN = "\033[92m"
