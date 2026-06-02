@@ -56,21 +56,31 @@ app.add_middleware(
 )
 
 
-# Evento de inicio: crear tablas si no existen
+# Evento de inicio: crear tablas solo en modo DEBUG
 @app.on_event("startup")
 def startup_event():
     """
     Se ejecuta al iniciar la aplicación.
-    Crea todas las tablas definidas en los modelos ORM si no existen.
+    En modo DEBUG: Crea todas las tablas definidas en los modelos ORM si no existen.
+    En producción: Solo registra que la app está iniciada.
     """
     print("🚀 Iniciando aplicación...")
     
-    # Crear las tablas en la base de datos
-    Base.metadata.create_all(bind=engine)
-    print("✅ Tablas de base de datos creadas/verificadas")
-    
-    # Crear roles por defecto si no existen (opcional pero recomendado)
-    _create_default_roles()
+    # Solo crear tablas automáticamente en modo DEBUG
+    if settings.debug_mode:
+        print("🔧 Modo DEBUG activado - Creando tablas de base de datos...")
+        try:
+            Base.metadata.create_all(bind=engine)
+            print("✅ Tablas de base de datos creadas/verificadas")
+            
+            # Crear roles por defecto si no existen
+            _create_default_roles()
+            print("✅ Roles por defecto creados/verificados")
+        except Exception as e:
+            print(f"⚠️ Error al crear tablas: {e}")
+            print("   En producción, asegúrate de haber ejecutado reset_db.py localmente")
+    else:
+        print("📦 Modo PRODUCCIÓN - Asumiendo BD ya inicializada")
     
     print("✅ Aplicación lista!")
 
