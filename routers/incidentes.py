@@ -1,9 +1,3 @@
-"""
-routers/incidentes.py - Endpoints para reporte de Incidentes y Evidencia
-Sistema de emergencias vehiculares con triaje automático y captura multimedia
-Protegido con autenticación JWT e inyección de dependencias
-"""
-
 from fastapi import APIRouter, Depends, status, HTTPException, Request
 from sqlalchemy.orm import Session
 from typing import List
@@ -45,45 +39,7 @@ def reportar_incidente(
     db: Session = Depends(get_db)
 ):
     """
-    Reporta un nuevo incidente/emergencia vehicular
-    
-    Proceso automático:
-    1. Valida que el vehículo pertenece al usuario
-    2. Ejecuta algoritmo IA para determinar prioridad
-    3. Crea el incidente con estado PENDIENTE
-    4. Registra evidencias multimedia capturadas
-    5. Sistema de triaje lo pone en cola de atención
-    
-    Request Body:
-        id_vehiculo: ID del vehículo involucrado (must belong to user)
-        descripcion: Descripción detallada del incidente (10-1000 chars)
-        ubicacion_lat: Latitud GPS del incidente (optional, -90 to 90)
-        ubicacion_long: Longitud GPS del incidente (optional, -180 to 180)
-        evidencias: Lista de evidencias multimedia capturadas
-            - tipo: FOTO, VIDEO, AUDIO, DOCUMENTO
-            - url: URL del archivo almacenado
-            - tamano_bytes: Tamaño del archivo (optional)
-            - descripcion: Descripción de la evidencia (optional)
-    
-    Returns:
-        Incidente creado con ID, estado PENDIENTE, prioridad asignada por IA
-        e información de todas las evidencias asociadas
-    
-    Example Request:
-    {
-        "id_vehiculo": 1,
-        "descripcion": "Choque frontal en Cra. 7 con calle 93. Dos vehículos involucrados.",
-        "ubicacion_lat": 4.72,
-        "ubicacion_long": -74.01,
-        "evidencias": [
-            {
-                "tipo": "FOTO",
-                "url": "https://storage.example.com/incidente_001_foto1.jpg",
-                "tamano_bytes": 2048576,
-                "descripcion": "Vista frontal del daño"
-            }
-        ]
-    }
+    Reporta un nuevo incidente/emergencia vehicular con triaje automático.
     """
     incidente = crear_incidente(db, current_user.id_usuario, datos)
     
@@ -95,7 +51,7 @@ def reportar_incidente(
         nombre_usuario=f"{current_user.nombre} {current_user.apellido}",
         evento="CREATE",
         recurso="INCIDENTE",
-        accion=f"Nuevo incidente creado para vehículo ID {datos.id_vehiculo}. Prioridad: {incidente.prioridad.value}",
+        accion=f"Nuevo incidente creado para vehículo ID {datos.id_vehiculo}. Prioridad: {incidente.prioridad}",
         payload=f"descripcion={datos.descripcion[:100]}..."
     )
     
@@ -110,16 +66,7 @@ def listar_mis_incidentes(
     db: Session = Depends(get_db)
 ):
     """
-    Obtiene historial de incidentes reportados por el usuario
-    
-    Implementa RBAC: El usuario solo ve sus propios incidentes
-    
-    Query Parameters:
-        skip: Número de registros a saltar (paginación)
-        limit: Máximo de registros a retornar
-    
-    Returns:
-        Lista de incidentes del usuario con sus evidencias en orden descendente
+    Obtiene historial de incidentes reportados por el usuario actual (RBAC).
     """
     try:
         incidentes = obtener_incidentes_por_cliente(db, current_user.id_usuario, skip=skip, limit=limit)
@@ -141,28 +88,12 @@ def obtener_detalles_incidente(
     db: Session = Depends(get_db)
 ):
     """
-    Obtiene detalles completos de un incidente específico
-    
-    Incluye:
-    - Información del incidente (descripción, GPS, timestamps)
-    - Prioridad asignada por IA
-    - Estado actual
-    - Todas las evidencias multimedia asociadas
-    
-    Validaciones:
-    - El incidente debe existir
-    - El usuario debe ser el reportante (RBAC)
-    
-    Path Parameters:
-        id_incidente: ID del incidente
-    
-    Returns:
-        Incidente completo con lista de evidencias
+    Obtiene detalles completos de un incidente específico validando pertenencia.
     """
     incidente = obtener_incidente_por_id(db, id_incidente)
     
-    # Validar que pertenece al usuario (RBAC)
-    if incidente.id_cliente != current_user.id:
+    # Validar que pertenece al usuario (RBAC) - CORREGIDO id -> id_usuario
+    if incidente.id_cliente != current_user.id_usuario:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No tiene permiso para ver este incidente"
@@ -184,25 +115,11 @@ def agregar_evidencia_incidente(
     db: Session = Depends(get_db)
 ):
     """
-    Añade una nueva evidencia multimedia a un incidente reportado
-    
-    Útil si el usuario captura evidencia después del reporte inicial
-    
-    Path Parameters:
-        id_incidente: ID del incidente
-    
-    Request Body:
-        tipo: Tipo de archivo - FOTO, VIDEO, AUDIO, DOCUMENTO
-        url: URL donde se almacenó el archivo (ej: S3, Cloudinary, etc.)
-        tamano_bytes: Tamaño del archivo en bytes (optional)
-        descripcion: Descripción de la evidencia (optional)
-    
-    Returns:
-        Evidencia creada con ID y timestamps
+    Añade una nueva evidencia multimedia a un incidente ya reportado.
     """
     incidente = obtener_incidente_por_id(db, id_incidente)
     
-    # Validar propiedad del incidente
+    # Validar propiedad del incidente - CORREGIDO id -> id_usuario
     if incidente.id_cliente != current_user.id_usuario:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -232,18 +149,12 @@ def obtener_evidencias_del_incidente(
     db: Session = Depends(get_db)
 ):
     """
-    Obtiene todas las evidencias multimedia asociadas a un incidente
-    
-    Path Parameters:
-        id_incidente: ID del incidente
-    
-    Returns:
-        Lista de evidencias con tipos, URLs y metadata
+    Obtiene todas las evidencias multimedia asociadas a un incidente.
     """
     incidente = obtener_incidente_por_id(db, id_incidente)
     
-    # Validar acceso
-    if incidente.id_cliente != current_user.id:
+    # Validar acceso - CORREGIDO id -> id_usuario
+    if incidente.id_cliente != current_user.id_usuario:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No tiene acceso a estas evidencias"
@@ -262,18 +173,7 @@ def eliminar_evidencia_incidente(
     db: Session = Depends(get_db)
 ):
     """
-    Elimina una evidencia específica de un incidente
-    
-    Validaciones:
-    - El incidente debe existir y pertenecer al usuario
-    - La evidencia debe existir y pertenecer al incidente
-    
-    Path Parameters:
-        id_incidente: ID del incidente
-        id_evidencia: ID de la evidencia a eliminar
-    
-    Returns:
-        204 No Content si fue exitoso
+    Elimina una evidencia específica de un incidente.
     """
     incidente = obtener_incidente_por_id(db, id_incidente)
     
@@ -313,19 +213,8 @@ def incidentes_por_estado(
     db: Session = Depends(get_db)
 ):
     """
-    Obtiene incidentes filtrados por estado
-    
-    ⚠️ Requiere rol OPERADOR o ADMIN
-    
-    Query Parameters:
-        estado: PENDIENTE, EN_TRIAJE, ASIGNADO, EN_ATENCION, RESUELTO, CANCELADO
-        skip: Paginación
-        limit: Límite de registros
-    
-    Returns:
-        Lista de incidentes en el estado especificado
+    Obtiene incidentes filtrados por estado (Para operadores/admin).
     """
-    # En producción, validar rol: debe ser operador o admin
     incidentes = obtener_incidentes_por_estado(db, estado, skip=skip, limit=limit)
     return IncidenteListResponse(
         total=len(incidentes),
@@ -342,17 +231,7 @@ def incidentes_por_prioridad(
     db: Session = Depends(get_db)
 ):
     """
-    Obtiene incidentes filtrados por prioridad
-    
-    ⚠️ Requiere rol OPERADOR o ADMIN
-    
-    Query Parameters:
-        prioridad: BAJA, MEDIA, ALTA, CRITICA
-        skip: Paginación
-        limit: Límite de registros
-    
-    Returns:
-        Lista de incidentes con la prioridad especificada
+    Obtiene incidentes filtrados por prioridad (Para operadores/admin).
     """
     incidentes = obtener_incidentes_por_prioridad(db, prioridad, skip=skip, limit=limit)
     return IncidenteListResponse(
@@ -368,15 +247,7 @@ def historial_incidentes_vehiculo(
     db: Session = Depends(get_db)
 ):
     """
-    Obtiene historial completo de incidentes de un vehículo específico
-    
-    Útil para análisis de historial de siniestros
-    
-    Path Parameters:
-        id_vehiculo: ID del vehículo
-    
-    Returns:
-        Lista de incidentes del vehículo en orden descendente
+    Obtiene el historial completo de incidentes de un vehículo específico.
     """
     incidentes = obtener_incidentes_por_vehiculo(db, id_vehiculo)
     return incidentes
@@ -395,24 +266,10 @@ def actualizar_estado(
     db: Session = Depends(get_db)
 ):
     """
-    Actualiza el estado de un incidente durante su ciclo de vida
-    
-    ⚠️ SOLO ADMIN puede cambiar el estado
-    
-    Flujo de estados:
-    PENDIENTE → EN_TRIAJE → ASIGNADO → EN_ATENCION → RESUELTO
-    (O puede cancelarse en cualquier momento)
-    
-    Path Parameters:
-        id_incidente: ID del incidente
-    
-    Query Parameters:
-        nuevo_estado: PENDIENTE, EN_TRIAJE, ASIGNADO, EN_ATENCION, RESUELTO, CANCELADO
-    
-    Returns:
-        Incidente con nuevo estado actualizado
+    Actualiza el estado de un incidente durante su ciclo de vida (Solo Admin).
     """
     incidente_anterior = obtener_incidente_por_id(db, id_incidente)
+    estado_anterior = incidente_anterior.estado
     incidente = actualizar_estado_incidente(db, id_incidente, nuevo_estado)
     
     # Registrar evento UPDATE en bitácora
@@ -423,7 +280,7 @@ def actualizar_estado(
         nombre_usuario=f"{current_user.nombre} {current_user.apellido}",
         evento="UPDATE",
         recurso="INCIDENTE",
-        accion=f"Estado del incidente #{id_incidente} actualizado de {incidente_anterior.estado.value} a {nuevo_estado}"
+        accion=f"Estado del incidente #{id_incidente} actualizado de {estado_anterior} a {nuevo_estado}"
     )
     
     return incidente
@@ -438,20 +295,10 @@ def actualizar_prioridad(
     db: Session = Depends(get_db)
 ):
     """
-    Actualiza la prioridad de un incidente (ajuste manual por operador)
-    
-    ⚠️ SOLO ADMIN puede cambiar la prioridad
-    
-    Path Parameters:
-        id_incidente: ID del incidente
-    
-    Query Parameters:
-        nueva_prioridad: BAJA, MEDIA, ALTA, CRITICA
-    
-    Returns:
-        Incidente con prioridad actualizada
+    Actualiza la prioridad de un incidente (Ajuste manual por administrador).
     """
     incidente_anterior = obtener_incidente_por_id(db, id_incidente)
+    prioridad_anterior = incidente_anterior.prioridad
     incidente = actualizar_prioridad_incidente(db, id_incidente, nueva_prioridad)
     
     # Registrar evento UPDATE en bitácora
@@ -462,7 +309,7 @@ def actualizar_prioridad(
         nombre_usuario=f"{current_user.nombre} {current_user.apellido}",
         evento="UPDATE",
         recurso="INCIDENTE",
-        accion=f"Prioridad del incidente #{id_incidente} actualizada de {incidente_anterior.prioridad.value} a {nueva_prioridad}"
+        accion=f"Prioridad del incidente #{id_incidente} actualizada de {prioridad_anterior} a {nueva_prioridad}"
     )
     
     return incidente
@@ -476,25 +323,19 @@ def calcular_prioridad_preview(
     current_user: UsuarioResponse = Depends(get_current_user)
 ):
     """
-    Calcula la prioridad de forma previa sin crear un incidente
-    
-    Útil para mostrar al usuario cuál será la prioridad antes de reportar
-    
-    Query Parameters:
-        descripcion: Descripción del incidente
-        ubicacion_lat: Latitud (optional)
-        ubicacion_long: Longitud (optional)
-    
-    Returns:
-        Prioridad asignada, razón y tiempo estimado de respuesta
+    Calcula la prioridad de forma previa alineado al Schema TriajeAIResponse de Pydantic V2.
     """
     resultado_ia = calcular_prioridad_ia(descripcion, ubicacion_lat, ubicacion_long)
     
+    # CORREGIDO: Mapeo de nombres exactos para que coincidan con schemas/incidente.py
     return TriajeAIResponse(
-        id_incidente=0,  # Preview, no hay ID aún
-        prioridad_asignada=resultado_ia["prioridad"].value,
-        razon_prioridad=resultado_ia["razon"],
-        tiempo_respuesta_estimado_minutos=resultado_ia["tiempo_respuesta_minutos"]
+        nivel_prioridad=str(resultado_ia["prioridad"]),
+        diagnostico_presuntivo=resultado_ia["razon"],
+        recomendaciones=[
+            f"Tiempo estimado de atención en zona: {resultado_ia['tiempo_respuesta_minutos']} minutos.",
+            "Mantenga la calma y espere la asignación de una unidad móvil de asistencia."
+        ],
+        taller_sugerido_id=None
     )
 
 
@@ -508,13 +349,7 @@ def resumen_incidentes(
     db: Session = Depends(get_db)
 ):
     """
-    Obtiene resumen estadístico de todos los incidentes
-    
-    ⚠️ Requiere rol ADMINISTRADOR
-    
-    Returns:
-        Total de incidentes, cantidad por estado, cantidad por prioridad
+    Obtiene el resumen estadístico de todos los incidentes para el Dashboard de administración.
     """
-    # En producción, validar que es admin
     resumen = obtener_resumen_incidentes(db)
     return resumen
