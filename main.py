@@ -6,18 +6,10 @@ Inicializa la aplicación, crea las tablas en BD y registra los routers
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from config import get_settings
-from models.database import engine, Base
-from routers import auth, dashboard, vehiculos, incidentes, usuarios, roles, bitacora, talleres, tecnicos
+from routers import auth, dashboard, vehiculos, incidentes, usuarios, roles, bitacora, talleres, tecnicos, zona_cobertura
+from models.database import Base, engine
+import models  # Importar modelos para registrar con SQLAlchemy
 
-# Importar todos los modelos para que SQLAlchemy los reconozca en metadata
-# IMPORTANTE: Estos imports son necesarios para que Base.metadata.create_all() funcione
-from models.user import Usuario, Rol, Permiso
-from models.tecnico import Tecnico
-from models.taller import Taller
-from models.vehiculo import Vehiculo
-from models.solicitud import SolicitudServicio
-from models.incidente import Incidente, Evidencia, TriajeIA, HistorialIncidente, MensajeInApp
-from models.bitacora import Bitacora
 
 # Obtener configuración
 settings = get_settings()
@@ -186,6 +178,9 @@ app.include_router(talleres.router)
 
 # Router de Técnicos - Gestión de técnicos
 app.include_router(tecnicos.router)
+
+# Router de Zonas de Cobertura - Gestión de áreas de cobertura (PostGIS)
+app.include_router(zona_cobertura.router)
 
 
 # Endpoint raíz para verificar que la API está activa

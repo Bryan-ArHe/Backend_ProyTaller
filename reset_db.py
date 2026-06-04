@@ -6,13 +6,16 @@ Uso: python reset_db.py
 import sys
 from sqlalchemy import text
 from models.database import SessionLocal, engine, Base
-from models.user import Usuario, Rol, Permiso, EstadoCuenta
+
+# === IMPORTACIONES OBLIGATORIAS CORREGIDAS ===
+# Importamos la inicialización del paquete para mapear SQLAlchemy
+import models  
+# Importamos explícitamente las clases para poder instanciarlas directamente en este script
+from models.user import Rol, Permiso, Usuario, EstadoCuenta
 from models.taller import Taller
 from models.tecnico import Tecnico
-from models.vehiculo import Vehiculo
-from models.incidente import Incidente
-from models.bitacora import Bitacora
-from models.solicitud import SolicitudServicio
+# =============================================
+
 from security.password import hash_password
 
 
@@ -39,9 +42,15 @@ def reset_database():
             conn.execute(text("GRANT ALL ON SCHEMA public TO postgres;"))
             conn.execute(text("GRANT ALL ON SCHEMA public TO public;"))
             conn.commit()
-            print('   ✓ Schema recreado con permisos')
+            
+            # PostGIS: Como destruimos el esquema public, obligatoriamente debemos asegurarnos 
+            # de que la extensión espacial vuelva a activarse en la nueva estructura limpia.
+            print('   - Asegurando extensión PostGIS...')
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis;"))
+            conn.commit()
+            print('   ✓ Schema recreado con permisos y PostGIS')
         except Exception as e:
-            print(f'   ⚠️  Error recreando schema: {e}')
+            print(f'   ⚠️  Error recreando schema o postgis: {e}')
             conn.rollback()
     
     print('🏗️  Creando nuevas tablas desde los modelos...')
@@ -117,6 +126,7 @@ def create_test_data():
         tecnico_permisos = db.query(Permiso).filter(
             Permiso.nombre.in_([
                 'leer_incidente', 'actualizar_incidente',
+                'procesar_incidente', # Si existe en tu lógica original
                 'leer_solicitud_servicio', 'actualizar_solicitud_servicio',
                 'leer_usuario', 'ver_dashboard',
                 'leer_bitacora',
@@ -151,7 +161,7 @@ def create_test_data():
         print('   ✓ Permisos asignados a roles')
         
         print('\n👤 CREANDO USUARIOS...')
-        password_hash = hash_password('12345678')  # Contraseña común para todos los usuarios de prueba (cambiar en producción)
+        password_hash = hash_password('12345678')  # Contraseña común para todos los usuarios de prueba
         usuarios_data = [
             Usuario(
                 nombre='Admin',
@@ -195,10 +205,9 @@ def create_test_data():
             db.add(u)
         db.commit()
         print(f'   ✓ {len(usuarios_data)} usuarios creados')
-        print('   Credenciales: email/password123')
+        print('   Credenciales: email / password: 12345678')
         
         print('\n🏭 CREANDO TALLERES...')
-        # Obtener usuario admin como propietario
         admin_user = db.query(Usuario).filter(Usuario.email == 'admin@example.com').first()
         
         talleres_data = [
@@ -228,14 +237,13 @@ def create_test_data():
         print(f'   ✓ {len(talleres_data)} talleres creados')
         
         print('\n🔧 CREANDO TÉCNICOS...')
-        # Obtener usuarios técnicos
         tecnico_user = db.query(Usuario).filter(Usuario.email == 'tecnico@example.com').first()
-        talleres = db.query(Taller).all()
+        talleres_db = db.query(Taller).all()
         
-        if tecnico_user and talleres:
+        if tecnico_user and talleres_db:
             tecnico = Tecnico(
                 id_usuario=tecnico_user.id_usuario,
-                id_taller=talleres[0].id,
+                id_taller=talleres_db[0].id,
                 especialidad='Mecánica General',
                 estado_disponibilidad='Libre'
             )
@@ -274,4 +282,3 @@ if __name__ == '__main__':
     except Exception as e:
         print(f'\n❌ Error fatal: {e}')
         sys.exit(1)
-

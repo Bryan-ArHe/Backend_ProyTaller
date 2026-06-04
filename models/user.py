@@ -51,12 +51,12 @@ class Usuario(Base):
 
     # --- RELACIONES DINÁMICAS (El secreto para evitar errores) ---
     rol = relationship("Rol", back_populates="usuarios")
-    bitacoras = relationship("models.bitacora.Bitacora", back_populates="usuario", cascade="all, delete-orphan")
+    bitacoras = relationship("Bitacora", back_populates="usuario", cascade="all, delete-orphan")
     
     # Usamos lazy='dynamic' o el path completo para evitar bloqueos
-    tecnico = relationship("models.tecnico.Tecnico", back_populates="usuario", uselist=False)
-    solicitudes_servicio = relationship("models.solicitud.SolicitudServicio", back_populates="cliente")
-    incidentes = relationship("models.incidente.Incidente", back_populates="cliente")
+    tecnico = relationship("Tecnico", back_populates="usuario", uselist=False)
+    solicitudes_servicio = relationship("SolicitudServicio", back_populates="cliente")
+    incidentes = relationship("Incidente", back_populates="cliente")
 
     def __repr__(self):
         return f"<Usuario(email='{self.email}', rol='{self.id_rol}')>"

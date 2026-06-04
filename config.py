@@ -20,7 +20,7 @@ class Settings:
         # Base de datos
         self.database_url = os.getenv(
             "DATABASE_URL",
-            "postgresql://postgres:123456@localhost:5432/gestiontaller"
+            "postgresql://postgres.fcjnirrnaeemalxkqfwz:Db_PryTaller@aws-1-us-west-2.pooler.supabase.com:6543/postgres"
         )
         
         # JWT

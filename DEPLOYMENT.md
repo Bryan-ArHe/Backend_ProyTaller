@@ -105,7 +105,7 @@ allow_origins=[
    ```bash
    curl -X POST "https://tu-proyecto.vercel.app/auth/login" \
      -H "Content-Type: application/json" \
-     -d '{"email": "admin@example.com", "password": "123456"}'
+     -d '{"email": "admin@example.com", "password": "12345678"}'
    ```
 
 ## 🔧 Problemas Comunes
