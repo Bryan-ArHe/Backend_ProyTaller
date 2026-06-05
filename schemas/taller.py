@@ -25,8 +25,9 @@ class TallerUpdate(BaseModel):
     capacidad_vehiculos: Optional[int] = None
     estado_activo: Optional[bool] = None
 
+# === ESQUEMA DE SALIDA CORREGIDO ===
 class TallerResponse(TallerBase):
-    id: int
+    id_taller: int  
     id_propietario: int
     created_at: datetime
 

@@ -13,9 +13,6 @@ from datetime import datetime
 # ============================================================================
 
 def calcular_prioridad_ia(descripcion: str, ubicacion_lat: float = None, ubicacion_long: float = None) -> dict:
-    """
-    Placeholder para lógica de IA que determina prioridad automáticamente.
-    """
     palabras_criticas = ["choque", "volcamiento", "vuelco", "explosión", "fuego", "incendio"]
     descripcion_lower = descripcion.lower()
     
@@ -47,14 +44,14 @@ def calcular_prioridad_ia(descripcion: str, ubicacion_lat: float = None, ubicaci
 # OPERACIONES CRUD - INCIDENTE
 # ============================================================================
 
-def crear_incidente(db: Session, id_cliente: int, datos: IncidenteCreate) -> Incidente:
+def crear_incidente(db: Session, id_usuario: int, datos: IncidenteCreate) -> Incidente:
     """
-    Crea un nuevo reporte de incidente validando que el vehículo pertenezca al cliente.
+    Crea un nuevo reporte de incidente validando que el vehículo pertenezca al usuario/cliente.
     """
-    # Validar vehículo y correspondencia al cliente
+    # Cambiado Vehiculo.id_cliente -> Vehiculo.id_usuario (o el ID que maneje tu tabla Vehiculo)
     vehiculo = db.query(Vehiculo).filter(
-        Vehiculo.id == datos.id_vehiculo,
-        Vehiculo.id_cliente == id_cliente
+        Vehiculo.id_vehiculo == datos.id_vehiculo,
+        Vehiculo.id_usuario == id_usuario
     ).first()
     
     if not vehiculo:
@@ -70,22 +67,24 @@ def crear_incidente(db: Session, id_cliente: int, datos: IncidenteCreate) -> Inc
     )
     
     try:
+        # ALINEADO COMPLETAMENTE A TU MODELO REAL
         nuevo_incidente = Incidente(
             id_vehiculo=datos.id_vehiculo,
-            id_cliente=id_cliente,
+            id_usuario=id_usuario, 
             descripcion=datos.descripcion,
-            estado=EstadoIncidente.PENDIENTE.value if hasattr(EstadoIncidente, 'PENDIENTE') else "PENDIENTE",
+            estado_incidente=EstadoIncidente.PENDIENTE.value if hasattr(EstadoIncidente, 'PENDIENTE') else "PENDIENTE", # Corregido: estado -> estado_incidente
             prioridad=calculo_ia["prioridad"],
-            ubicacion_lat=datos.ubicacion_lat,
-            ubicacion_long=datos.ubicacion_long
+            latitud=datos.ubicacion_lat,
+            longitud=datos.ubicacion_long,
+            fecha_incidente=datetime.utcnow()
         )
         
         db.add(nuevo_incidente)
-        db.flush()  # Obtener id_incidente sin cerrar la transacción
+        db.flush() 
         
         for evidencia_data in datos.evidencias:
             nueva_evidencia = Evidencia(
-                id_incidente=nuevo_incidente.id_incidente,  # CORREGIDO: id -> id_incidente
+                id_incidente=nuevo_incidente.id_incidente,
                 tipo=evidencia_data.tipo,
                 url=evidencia_data.url,
                 tamano_bytes=evidencia_data.tamano_bytes,
@@ -106,8 +105,7 @@ def crear_incidente(db: Session, id_cliente: int, datos: IncidenteCreate) -> Inc
 
 
 def obtener_incidente_por_id(db: Session, id_incidente: int) -> Incidente:
-    """Obtiene un incidente específico validando su existencia."""
-    incidente = db.query(Incidente).filter(Incidente.id_incidente == id_incidente).first()  # CORREGIDO: id -> id_incidente
+    incidente = db.query(Incidente).filter(Incidente.id_incidente == id_incidente).first()
     if not incidente:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -117,44 +115,38 @@ def obtener_incidente_por_id(db: Session, id_incidente: int) -> Incidente:
 
 
 def obtener_incidentes_por_cliente(db: Session, id_usuario: int, skip: int = 0, limit: int = 100) -> list:
-    """Obtiene el historial de incidentes de un usuario (Orden cronológico inverso)."""
     return db.query(Incidente).filter(
-        Incidente.id_cliente == id_usuario  # CORREGIDO: id_usuario -> id_cliente conforme al modelo
-    ).order_by(Incidente.fecha_reporte.desc()).offset(skip).limit(limit).all()  # CORREGIDO: fecha_incidente -> fecha_reporte
+        Incidente.id_usuario == id_usuario
+    ).order_by(Incidente.fecha_incidente.desc()).offset(skip).limit(limit).all()
 
 
 def obtener_incidentes_por_vehiculo(db: Session, id_vehiculo: int) -> list:
-    """Obtiene el historial de incidentes de un vehículo específico."""
     return db.query(Incidente).filter(
         Incidente.id_vehiculo == id_vehiculo
-    ).order_by(Incidente.fecha_reporte.desc()).all()  # CORREGIDO: fecha_incidente -> fecha_reporte
+    ).order_by(Incidente.fecha_incidente.desc()).all()
 
 
 def obtener_incidentes_por_estado(db: Session, estado: str, skip: int = 0, limit: int = 100) -> list:
-    """Obtiene incidentes filtrados por estado para operadores."""
     return db.query(Incidente).filter(
-        Incidente.estado == estado  # CORREGIDO: estado_incidente -> estado
-    ).order_by(Incidente.fecha_reporte.desc()).offset(skip).limit(limit).all()  # CORREGIDO: fecha_incidente -> fecha_reporte
+        Incidente.estado_incidente == estado
+    ).order_by(Incidente.fecha_incidente.desc()).offset(skip).limit(limit).all()
 
 
 def obtener_incidentes_por_prioridad(db: Session, prioridad: str, skip: int = 0, limit: int = 100) -> list:
-    """Obtiene incidentes filtrados por prioridad."""
     return db.query(Incidente).filter(
         Incidente.prioridad == prioridad
-    ).order_by(Incidente.fecha_reporte.desc()).offset(skip).limit(limit).all()  # CORREGIDO: Agregado filtro faltante
+    ).order_by(Incidente.fecha_incidente.desc()).offset(skip).limit(limit).all()
 
 
 def actualizar_estado_incidente(db: Session, id_incidente: int, nuevo_estado: str) -> Incidente:
-    """Actualiza el estado actual de la emergencia."""
     incidente = obtener_incidente_por_id(db, id_incidente)
-    incidente.estado = nuevo_estado
+    incidente.estado_incidente = nuevo_estado
     db.commit()
     db.refresh(incidente)
     return incidente
 
 
 def actualizar_prioridad_incidente(db: Session, id_incidente: int, nueva_prioridad: str) -> Incidente:
-    """Modificación manual de prioridad por parte del personal operativo."""
     incidente = obtener_incidente_por_id(db, id_incidente)
     incidente.prioridad = nueva_prioridad
     db.commit()
@@ -163,11 +155,10 @@ def actualizar_prioridad_incidente(db: Session, id_incidente: int, nueva_priorid
 
 
 def obtener_resumen_incidentes(db: Session) -> dict:
-    """Genera las estadísticas agregadas consumidas por el Dashboard."""
     total = db.query(Incidente).count()
     por_estado = {}
     for estado in EstadoIncidente:
-        por_estado[estado.value] = db.query(Incidente).filter(Incidente.estado == estado.value).count()
+        por_estado[estado.value] = db.query(Incidente).filter(Incidente.estado_incidente == estado.value).count()
     
     por_prioridad = {}
     for prioridad in PrioridadIncidente:
@@ -179,15 +170,12 @@ def obtener_resumen_incidentes(db: Session) -> dict:
         "por_prioridad": por_prioridad
     }
 
-
 # ============================================================================
 # OPERACIONES CRUD - EVIDENCIA
 # ============================================================================
 
 def crear_evidencia(db: Session, id_incidente: int, datos: EvidenciaCreate) -> Evidencia:
-    """Añade una nueva evidencia multimedia a un incidente existente."""
     obtener_incidente_por_id(db, id_incidente)
-    
     try:
         nueva_evidencia = Evidencia(
             id_incidente=id_incidente,
@@ -207,22 +195,17 @@ def crear_evidencia(db: Session, id_incidente: int, datos: EvidenciaCreate) -> E
             detail="Error al crear la evidencia. Verifique los datos."
         )
 
-
 def obtener_evidencias_incidente(db: Session, id_incidente: int) -> list:
-    """Obtiene todas las evidencias asociadas a un incidente."""
     obtener_incidente_por_id(db, id_incidente)
     return db.query(Evidencia).filter(Evidencia.id_incidente == id_incidente).all()
 
-
 def eliminar_evidencia(db: Session, id_evidencia: int) -> bool:
-    """Elimina permanentemente el registro de una evidencia de la base de datos."""
-    evidencia = db.query(Evidencia).filter(Evidencia.id_evidencia == id_evidencia).first()  # CORREGIDO: id -> id_evidencia
+    evidencia = db.query(Evidencia).filter(Evidencia.id_evidencia == id_evidencia).first()
     if not evidencia:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Evidencia con ID {id_evidencia} no encontrada"
         )
-    
     db.delete(evidencia)
     db.commit()
     return True

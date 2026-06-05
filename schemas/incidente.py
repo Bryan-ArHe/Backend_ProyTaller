@@ -51,18 +51,15 @@ class IncidenteCreate(BaseModel):
 
 
 class IncidenteResponse(BaseModel):
-    """Esquema de respuesta para Incidente"""
     id_incidente: int
-    id_vehiculo: int
-    id_usuario: int
-    descripcion: str
-    estado: str
+    id_vehiculo: Optional[int] = None
+    id_usuario: Optional[int] = None
+    descripcion: Optional[str] = None 
+    estado_incidente: str 
     prioridad: str
-    ubicacion_lat: Optional[float]
-    ubicacion_long: Optional[float]
-    fecha_reporte: datetime
-    fecha_actualizacion: datetime
-
+    latitud: Optional[float] = None
+    longitud: Optional[float] = None 
+    fecha_incidente: datetime
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -77,9 +74,9 @@ class IncidenteDetailedResponse(IncidenteResponse):
 
 
 class IncidenteListResponse(BaseModel):
-    """Respuesta para lista de incidentes del usuario"""
-    total: int = Field(..., ge=0)
-    incidentes: List[IncidenteDetailedResponse] = Field(default_factory=list)
+    total: int
+    incidentes: List[IncidenteResponse] # <-- Que use el esquema corregido de arriba
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TriajeAIResponse(BaseModel):

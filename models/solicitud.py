@@ -1,37 +1,41 @@
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, Text, JSON
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Enum as SQLEnum
 from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
-from models.database import Base
+from datetime import datetime
+import enum
+from models.database import Base # Usamos tu Base compartida
+
+class EstadoSolicitud(str, enum.Enum):
+    PENDIENTE = "PENDIENTE"
+    EN_PROCESO = "EN_PROCESO"
+    RESUELTO = "RESUELTO"
+    CANCELADO = "CANCELADO"
 
 class SolicitudServicio(Base):
     __tablename__ = "solicitud_servicio"
 
-    id_solicitud = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    id_solicitud = Column(Integer, primary_key=True, index=True)
+    codigo_orden = Column(String, unique=True, index=True, nullable=False)
     
-    # El cliente que reporta la emergencia
-    id_usuario = Column(Integer, ForeignKey("usuario.id_usuario", ondelete="CASCADE"), nullable=False, index=True)
+    # Llaves foráneas
+    incidente_id = Column(Integer, ForeignKey("incidente.id_incidente", ondelete="CASCADE"), nullable=False)
+    tecnico_id = Column(Integer, ForeignKey("tecnico.id_tecnico", ondelete="RESTRICT"), nullable=False)
+    taller_id = Column(Integer, ForeignKey("taller.id_taller", ondelete="SET NULL"), nullable=True)
     
-    # El técnico que acudirá al rescate (Es nulo al principio hasta que el algoritmo o un humano lo asigne)
-    id_tecnico = Column(Integer, ForeignKey("tecnico.id_tecnico"), nullable=True, index=True)
+    # Campos de control de estado y negocio
+    estado = Column(SQLEnum(EstadoSolicitud), default=EstadoSolicitud.PENDIENTE, nullable=False)
+    descripcion_trabajo = Column(String, nullable=True)
+    observaciones_tecnicas = Column(String, nullable=True)
+    
+    # Tiempos
+    fecha_asignacion = Column(DateTime, default=datetime.utcnow, nullable=False)
+    fecha_finalizacion = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
-    # Detalles del incidente
-    tipo_emergencia = Column(String(100), nullable=False)
-    descripcion = Column(Text, nullable=True)
-    evidencia_multimedia = Column(JSON, nullable=True) 
-
-    # Coordenadas exactas del cliente varado
-    latitud = Column(Float, nullable=False)
-    longitud = Column(Float, nullable=False)
-    
-    # Ciclo de vida de la emergencia (Pendiente, Asignada, En Curso, Resuelta, Cancelada)
-    estado = Column(String(50), default="Pendiente", nullable=False)
-    
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    resolved_at = Column(DateTime(timezone=True), nullable=True) # Para medir tiempos de respuesta
-
-    # --- Relaciones Bidireccionales ---
-    cliente = relationship("models.user.Usuario", back_populates="solicitudes_servicio")
-    tecnico = relationship("models.tecnico.Tecnico", back_populates="solicitudes_servicio")
+    # --- RELACIONES RELACIONALES (Para cargas anidadas/lazy loading) ---
+    incidente = relationship("Incidente", back_populates="solicitud")
+    tecnico = relationship("Tecnico", back_populates="solicitudes_servicio")
+    taller = relationship("Taller", back_populates="solicitudes")
 
     def __repr__(self):
-        return f"<SolicitudServicio(id={self.id_solicitud}, tipo='{self.tipo_emergencia}', estado='{self.estado}')>"
+        return f"<SolicitudServicio(id={self.id_solicitud}, codigo={self.codigo_orden}, estado={self.estado})>"

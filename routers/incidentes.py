@@ -93,7 +93,7 @@ def obtener_detalles_incidente(
     incidente = obtener_incidente_por_id(db, id_incidente)
     
     # Validar que pertenece al usuario (RBAC) - CORREGIDO id -> id_usuario
-    if incidente.id_cliente != current_user.id_usuario:
+    if incidente.id_usuario != current_user.id_usuario:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No tiene permiso para ver este incidente"
@@ -120,7 +120,7 @@ def agregar_evidencia_incidente(
     incidente = obtener_incidente_por_id(db, id_incidente)
     
     # Validar propiedad del incidente - CORREGIDO id -> id_usuario
-    if incidente.id_cliente != current_user.id_usuario:
+    if incidente.id_usuario != current_user.id_usuario:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No puede agregar evidencias a este incidente"
@@ -154,7 +154,7 @@ def obtener_evidencias_del_incidente(
     incidente = obtener_incidente_por_id(db, id_incidente)
     
     # Validar acceso - CORREGIDO id -> id_usuario
-    if incidente.id_cliente != current_user.id_usuario:
+    if incidente.id_usuario != current_user.id_usuario:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No tiene acceso a estas evidencias"
@@ -178,7 +178,7 @@ def eliminar_evidencia_incidente(
     incidente = obtener_incidente_por_id(db, id_incidente)
     
     # Validar propiedad
-    if incidente.id_cliente != current_user.id_usuario:
+    if incidente.id_usuario != current_user.id_usuario:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No puede eliminar evidencias de este incidente"
@@ -269,7 +269,7 @@ def actualizar_estado(
     Actualiza el estado de un incidente durante su ciclo de vida (Solo Admin).
     """
     incidente_anterior = obtener_incidente_por_id(db, id_incidente)
-    estado_anterior = incidente_anterior.estado
+    estado_anterior = incidente_anterior.estado_incidente
     incidente = actualizar_estado_incidente(db, id_incidente, nuevo_estado)
     
     # Registrar evento UPDATE en bitácora

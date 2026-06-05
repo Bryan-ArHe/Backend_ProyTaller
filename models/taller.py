@@ -1,25 +1,18 @@
-from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, DateTime
-from sqlalchemy.sql import func
-from models.database import Base
+# Dentro de models/taller.py
+from sqlalchemy import Column, Integer, String, ForeignKey
 from sqlalchemy.orm import relationship
+from models.database import Base
 
 class Taller(Base):
     __tablename__ = "taller"
 
-    # Campos existentes en tu imagen
-    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    nombre = Column(String, nullable=False)
-    direccion = Column(String, nullable=False)
-    id_propietario = Column(Integer, ForeignKey("usuario.id_usuario"), nullable=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    id_taller = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    id_gestor = Column(Integer, ForeignKey("gestor_taller.id_gestor", ondelete="RESTRICT"), nullable=False)
+    nombre = Column(String(100), nullable=False)
+    direccion = Column(String(250), nullable=False)
+    telefono = Column(String(20), nullable=True)
 
-    # Nuevos atributos para la lógica de emergencias
-    telefono = Column(String, nullable=True)
-    latitud = Column(Float, nullable=True)
-    longitud = Column(Float, nullable=True)
-    especialidad = Column(String, nullable=True)
-    capacidad_vehiculos = Column(Integer, default=1)
-    estado_activo = Column(Boolean, default=True)
-
-    # Relación bidireccional con el modelo Tecnico
-    tecnicos_asignados = relationship("models.tecnico.Tecnico", back_populates="taller")
+    # Relaciones obligatorias
+    gestor = relationship("GestorTaller", back_populates="talleres")
+    tecnicos = relationship("Tecnico", back_populates="taller")
+    solicitudes = relationship("SolicitudServicio", back_populates="taller")

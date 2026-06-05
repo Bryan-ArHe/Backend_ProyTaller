@@ -1,36 +1,44 @@
-from pydantic import BaseModel, ConfigDict, Field
-from typing import Optional
+from pydantic import BaseModel, ConfigDict
 from datetime import datetime
+from typing import Optional
 
-# 1. ESQUEMA BASE: Propiedades comunes
+# 1. Esquema Base con los campos EXACTOS de tu modelo Tecnico
 class TecnicoBase(BaseModel):
-    especialidad: Optional[str] = Field(None, description="Ej: Mecánica General, Electricidad, Chaperío")
-    estado_disponibilidad: str = Field(default="Libre", description="Valores permitidos: Libre, Ocupado, Inactivo")
-    
-    # Coordenadas que se actualizarán constantemente desde la app del técnico
+    id_usuario: int
+    id_taller: Optional[int] = None
+    especialidad: Optional[str] = None
+    estado_disponibilidad: str = "Libre"
     latitud_actual: Optional[float] = None
     longitud_actual: Optional[float] = None
 
-# 2. ESQUEMA DE CREACIÓN (Lo que Angular manda en el POST)
 class TecnicoCreate(TecnicoBase):
-    # Llaves foráneas obligatorias para vincular al técnico con su cuenta y su taller
-    id_usuario: int  # (Cambiar a str si en Supabase el id de usuario es UUID)
-    id_taller: int
+    pass
 
-# 3. ESQUEMA DE ACTUALIZACIÓN (Lo que Angular manda en el PUT/PATCH)
 class TecnicoUpdate(BaseModel):
-    # Todo es opcional. Por seguridad, no permitimos que se actualice el id_usuario o id_taller por esta vía
+    id_taller: Optional[int] = None
     especialidad: Optional[str] = None
     estado_disponibilidad: Optional[str] = None
     latitud_actual: Optional[float] = None
     longitud_actual: Optional[float] = None
 
-# 4. ESQUEMA DE RESPUESTA (Lo que Angular recibe)
+# --- 2. ESQUEMA DE SALIDA PLANO (ROMPE EL BUCLE 10054) ---
 class TecnicoResponse(TecnicoBase):
     id_tecnico: int
-    id_usuario: int
-    id_taller: int
     created_at: datetime
 
-    # Permite a Pydantic leer los datos directamente del objeto SQLAlchemy
+    model_config = ConfigDict(from_attributes=True)
+
+# --- 3. ESQUEMAS ANIDADOS SEGUROS PARA EL FRONTEND ---
+class UsuarioMinOut(BaseModel):
+    """Para mostrar quién es el técnico en Angular sin traernos toda la BD"""
+    id_usuario: int
+    nombres: Optional[str] = None
+    username: Optional[str] = None
+    
+    model_config = ConfigDict(from_attributes=True)
+
+class TecnicoDetalladoResponse(TecnicoResponse):
+    """Este esquema incluye al usuario pero NO incluye al Taller completo"""
+    usuario: Optional[UsuarioMinOut] = None
+    
     model_config = ConfigDict(from_attributes=True)

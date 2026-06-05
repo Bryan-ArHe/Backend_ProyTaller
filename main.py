@@ -2,13 +2,13 @@
 main.py - Punto de entrada de la aplicación FastAPI
 Inicializa la aplicación, crea las tablas en BD y registra los routers
 """
-
+import models  # Importar modelos para registrar con SQLAlchemy
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from config import get_settings
-from routers import auth, dashboard, vehiculos, incidentes, usuarios, roles, bitacora, talleres, tecnicos, zona_cobertura
+from routers import auth, dashboard, vehiculos, incidentes, usuarios, roles, bitacora, talleres, tecnicos, zona_cobertura, solicitudes
 from models.database import Base, engine
-import models  # Importar modelos para registrar con SQLAlchemy
+
 
 
 # Obtener configuración
@@ -181,6 +181,9 @@ app.include_router(tecnicos.router)
 
 # Router de Zonas de Cobertura - Gestión de áreas de cobertura (PostGIS)
 app.include_router(zona_cobertura.router)
+
+# Router de Solicitudes de Servicio - Gestión de órdenes de trabajo y asignaciones
+app.include_router(solicitudes.router)
 
 
 # Endpoint raíz para verificar que la API está activa

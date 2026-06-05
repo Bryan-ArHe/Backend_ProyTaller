@@ -1,10 +1,11 @@
+# -*- coding: utf-8 -*-
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Table, Enum
 from sqlalchemy.orm import relationship
 from models.database import Base
 import enum
 
-# 1. Tabla de asociación para permisos
+# 1. Tabla de asociación para permisos (Match perfecto con tu BD)
 rol_permisos = Table(
     'rol_permiso',
     Base.metadata,
@@ -47,16 +48,17 @@ class Usuario(Base):
     telefono = Column(String(20), unique=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
     estado_cuenta = Column(Enum(EstadoCuenta), default=EstadoCuenta.ACTIVO)
+    # Cambiado a datetime.utcnow sin los paréntesis () para que se ejecute en caliente al insertar
     fecha_registro = Column(DateTime, default=datetime.utcnow)
 
-    # --- RELACIONES DINÁMICAS (El secreto para evitar errores) ---
+    # --- RELACIONES DE CONTROL Y SEGURIDAD ---
     rol = relationship("Rol", back_populates="usuarios")
     bitacoras = relationship("Bitacora", back_populates="usuario", cascade="all, delete-orphan")
     
-    # Usamos lazy='dynamic' o el path completo para evitar bloqueos
+    # --- RELACIONES DE HERENCIA 1:1 (Sincronizadas con uselist=False) ---
     tecnico = relationship("Tecnico", back_populates="usuario", uselist=False)
-    solicitudes_servicio = relationship("SolicitudServicio", back_populates="cliente")
-    incidentes = relationship("Incidente", back_populates="cliente")
+    cliente = relationship("Cliente", back_populates="usuario", uselist=False)
+    gestor_taller = relationship("GestorTaller", back_populates="usuario", uselist=False)
 
     def __repr__(self):
         return f"<Usuario(email='{self.email}', rol='{self.id_rol}')>"

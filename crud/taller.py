@@ -5,7 +5,7 @@ from schemas.taller import TallerCreate, TallerUpdate
 # --- LECTURA ---
 def get_taller(db: Session, taller_id: int):
     """Busca un taller específico por su ID."""
-    return db.query(Taller).filter(Taller.id == taller_id).first()
+    return db.query(Taller).filter(Taller.id_taller == taller_id).first()
 
 def get_talleres(db: Session, skip: int = 0, limit: int = 100):
     """Obtiene una lista paginada de talleres (solo los activos)."""
@@ -24,7 +24,7 @@ def create_taller(db: Session, taller: TallerCreate):
 # --- ACTUALIZACIÓN ---
 def update_taller(db: Session, taller_id: int, taller_data: TallerUpdate):
     """Actualiza los datos de un taller existente."""
-    db_taller = db.query(Taller).filter(Taller.id == taller_id).first()
+    db_taller = db.query(Taller).filter(Taller.id_taller == taller_id).first()
     
     if db_taller:
         # Extraemos solo los campos que el usuario envió explícitamente (exclude_unset=True)
@@ -41,7 +41,7 @@ def update_taller(db: Session, taller_id: int, taller_data: TallerUpdate):
 # --- BORRADO LÓGICO ---
 def delete_taller(db: Session, taller_id: int):
     """Desactiva un taller sin borrarlo de la base de datos (Borrado lógico)."""
-    db_taller = db.query(Taller).filter(Taller.id == taller_id).first()
+    db_taller = db.query(Taller).filter(Taller.id_taller == taller_id).first()
     
     if db_taller:
         db_taller.estado_activo = False

@@ -43,9 +43,7 @@ class Incidente(Base):
     __tablename__ = "incidente"
     
     id_incidente = Column(Integer, primary_key=True, index=True)
-    
-    # 1. CAMBIO CLAVE: Apunta a 'usuario.id_usuario'
-    id_usuario = Column(Integer, ForeignKey("usuario.id_usuario"), nullable=True, index=True)
+    id_cliente = Column(Integer, ForeignKey("cliente.id_cliente", ondelete="RESTRICT"), nullable=False, index=True)
     id_vehiculo = Column(Integer, ForeignKey("vehiculo.id_vehiculo"), nullable=True, index=True)
     
     fecha_incidente = Column(DateTime, default=datetime.utcnow, nullable=False)
@@ -55,12 +53,13 @@ class Incidente(Base):
     
     # 2. CAMBIO CLAVE: Relación con el nuevo modelo de Usuario
     # Usamos el string completo para evitar errores de carga
-    cliente = relationship("models.user.Usuario", back_populates="incidentes")
+    cliente = relationship("Cliente", back_populates="incidentes")
     
     vehiculo = relationship("Vehiculo", back_populates="incidentes")
     evidencias = relationship("Evidencia", back_populates="incidente", cascade="all, delete-orphan")
     triaje = relationship("TriajeIA", back_populates="incidente", uselist=False, cascade="all, delete-orphan")
     historial = relationship("HistorialIncidente", back_populates="incidente", cascade="all, delete-orphan")
+    solicitud = relationship("SolicitudServicio", back_populates="incidente", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<Incidente(id={self.id_incidente}, estado={self.estado_incidente})>"
