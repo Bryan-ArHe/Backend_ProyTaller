@@ -11,6 +11,7 @@ from schemas.user import (
     UsuarioResponse,
     UsuarioUpdate,
     UsuarioCreate,
+    UsuarioRolUpdate,
 )
 from auth.dependencies import get_current_user, check_permissions
 from crud import usuarios as crud_usuarios
@@ -194,20 +195,24 @@ def update_user_estado(
 @router.patch("/{usuario_id}/rol", response_model=UsuarioResponse)
 def update_user_rol(
     usuario_id: int,
-    rol_data: UsuarioUpdate,
+    rol_data: UsuarioRolUpdate,  # 🌟 SOLUCIÓN AL ATTRIBUTE-ERROR: Ahora sí tiene id_rol
     request: Request,
-    current_user: UsuarioResponse = Depends(get_current_user),
+    current_user: Usuario = Depends(get_current_user),  # 🛡️ TIPADO CORREGIDO: Viene el modelo ORM de SQLAlchemy
     db: Session = Depends(get_db),
 ):
     
-    # Verificar que el usuario actual sea administrador
-    if current_user.rol.nombre != "Administrador":
+    # 1. Verificar que el usuario actual sea administrador
+    # Obtenemos de forma segura el nombre del rol del usuario autenticado
+    rol_actual_nombre = current_user.rol.nombre if current_user.rol else ""
+    
+    # Damos soporte tanto a "Administrador" como a tu variación "Admistrador"
+    if rol_actual_nombre not in ["Administrador", "Admistrador"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Solo administradores pueden cambiar roles de usuarios"
         )
     
-    # Buscar el usuario a actualizar
+    # 2. Buscar el usuario a actualizar
     usuario = db.query(Usuario).filter(
         Usuario.id_usuario == usuario_id
     ).first()
@@ -218,7 +223,7 @@ def update_user_rol(
             detail=f"Usuario con ID {usuario_id} no encontrado"
         )
     
-    # Verificar que el rol exista
+    # 3. Verificar que el nuevo rol exista en el catálogo físico
     rol = db.query(Rol).filter(Rol.id_rol == rol_data.id_rol).first()
     
     if not rol:
@@ -227,16 +232,16 @@ def update_user_rol(
             detail=f"Rol con ID {rol_data.id_rol} no encontrado"
         )
     
-    # Guardar el rol anterior
+    # Guardar el rol anterior antes del cambio para auditarlo
     rol_anterior = usuario.rol.nombre if usuario.rol else "desconocido"
     
-    # Actualizar el rol
+    # 4. Actualizar la clave foránea en caliente
     usuario.id_rol = rol_data.id_rol
     
-    # Guardar cambios
+    # Guardar cambios en la base de datos
     db.commit()
     
-    # Registrar evento en bitácora
+    # 5. Registrar evento en bitácora de forma segura
     registrar_evento_bitacora(
         db=db,
         request=request,
@@ -247,12 +252,13 @@ def update_user_rol(
         accion=f"Cambió rol del usuario '{usuario.email}' de {rol_anterior} a {rol.nombre}"
     )
     
-    # Recargar el usuario con su rol cargado con joinedload
-    usuario = db.query(Usuario).options(
+    # 6. Recargar el usuario con su nueva relación de rol usando joinedload
+    usuario_actualizado = db.query(Usuario).options(
         joinedload(Usuario.rol)
     ).filter(Usuario.id_usuario == usuario_id).first()
     
-    return UsuarioResponse.model_validate(usuario)
+    # Pydantic v2 usa model_validate en lugar de from_orm
+    return UsuarioResponse.model_validate(usuario_actualizado)
 
 
 # ============================================================================

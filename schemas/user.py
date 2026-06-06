@@ -60,6 +60,12 @@ class UsuarioUpdate(BaseModel):
     telefono: Optional[str] = Field(None, min_length=7, max_length=20)
     password: Optional[str] = Field(None, min_length=8, max_length=72)
 
+class UsuarioRolUpdate(BaseModel):
+    """Esquema específico para la actualización administrativa del rol de un usuario"""
+    id_rol: int
+
+    model_config = ConfigDict(from_attributes=True)
+
 # --- SCHEMAS DE SEGURIDAD ---
 
 class LoginData(BaseModel):
