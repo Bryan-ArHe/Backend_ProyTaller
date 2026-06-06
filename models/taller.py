@@ -1,6 +1,7 @@
 # Dentro de models/taller.py
+from datetime import datetime
 from geoalchemy2 import Geometry
-from sqlalchemy import Column, Integer, String, ForeignKey
+from sqlalchemy import Column, DateTime, Integer, String, ForeignKey
 from sqlalchemy.orm import relationship
 from models.database import Base
 
@@ -13,6 +14,7 @@ class Taller(Base):
     direccion = Column(String(250), nullable=False)
     telefono = Column(String(20), nullable=True)
     ubicacion = Column(Geometry("POINT", srid=4326), nullable=True)
+    fecha_registro = Column(DateTime, default=datetime.utcnow)  # Fecha de creación en formato ISO
 
     # Relaciones obligatorias
     gestor = relationship("GestorTaller", back_populates="talleres")

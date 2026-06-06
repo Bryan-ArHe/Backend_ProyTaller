@@ -13,26 +13,31 @@ def listar_talleres_por_tenant(
     db: Session = Depends(get_db),
     id_gestor: int = Depends(get_current_gestor_id)
 ):
-    # Solicitamos columnas primitivas de forma explícita
+    # 1. Traemos las columnas y usamos el nuevo campo de tu modelo
     talleres_db = db.query(
         Taller.id_taller,
         Taller.id_gestor,
         Taller.nombre,
         Taller.direccion,
-        func.ST_AsText(Taller.ubicacion).label("ubicacion_wkt")
+        func.ST_AsText(Taller.ubicacion).label("ubicacion_wkt"),
+        Taller.fecha_registro  # 👈 Sincronizado
     ).filter(Taller.id_gestor == id_gestor).all()
     
-    # Construimos un mapeo de diccionarios planos. 
-    # Al no haber objetos intermedios de SQLAlchemy, Pydantic lo serializa al instante.
-    return [
-        {
-            "id_taller": t[0],
-            "id_gestor": t[1],
-            "nombre": t[2],
-            "direccion": t[3],
-            "ubicacion_wkt": t[5]
-        } for t in talleres_db
-    ]
+    resultado = []
+    for fila in talleres_db:
+        datos = fila._asdict() 
+        resultado.append({
+            "id_taller": datos["id_taller"],
+            "id_gestor": datos["id_gestor"],
+            "nombre": datos["nombre"],
+            "direccion": datos["direccion"],
+            "ubicacion_wkt": datos["ubicacion_wkt"],
+            # ⬇️ Leemos de 'fecha_registro' (BD) y alimentamos 'fecha_registro' (Pydantic)
+            "fecha_registro": datos["fecha_registro"]  
+        })
+        
+    return resultado
+
 
 @router.post("/", response_model=TallerSimpleResponse, status_code=201)
 def crear_taller_espacial(
@@ -45,6 +50,7 @@ def crear_taller_espacial(
             id_gestor=id_gestor,
             nombre=payload.nombre,
             direccion=payload.direccion,
+            telefono=payload.telefono,
             ubicacion=func.ST_GeomFromText(payload.ubicacion_wkt, 4326) if payload.ubicacion_wkt else None
         )
         db.add(nuevo_taller)
@@ -56,11 +62,13 @@ def crear_taller_espacial(
             "id_gestor": nuevo_taller.id_gestor,
             "nombre": nuevo_taller.nombre,
             "direccion": nuevo_taller.direccion,
-            "ubicacion_wkt": payload.ubicacion_wkt
+            "ubicacion_wkt": payload.ubicacion_wkt,
+            "fecha_registro": nuevo_taller.fecha_registro  # 👈 Corregido el atributo del modelo
         }
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=f"Error al guardar taller: {str(e)}")
+
 
 @router.get("/{id_taller}", response_model=TallerSimpleResponse)
 def obtener_detalle_taller(
@@ -68,21 +76,25 @@ def obtener_detalle_taller(
     db: Session = Depends(get_db),
     id_gestor: int = Depends(get_current_gestor_id)
 ):
+    # 1. BUG RESUELTO: Cambiado Taller.created_at por Taller.fecha_registro
     taller_db = db.query(
         Taller.id_taller,
         Taller.id_gestor,
         Taller.nombre,
         Taller.direccion,
-        func.ST_AsText(Taller.ubicacion).label("ubicacion_wkt")
+        func.ST_AsText(Taller.ubicacion).label("ubicacion_wkt"),
+        Taller.fecha_registro  # 👈 Sincronizado
     ).filter(Taller.id_taller == id_taller, Taller.id_gestor == id_gestor).first()
     
     if not taller_db:
         raise HTTPException(status_code=404, detail="Taller no encontrado o acceso no autorizado")
         
+    datos = taller_db._asdict()
     return {
-        "id_taller": taller_db.id_taller,
-        "id_gestor": taller_db.id_gestor,
-        "nombre": taller_db.nombre,
-        "direccion": taller_db.direccion,
-        "ubicacion_wkt": taller_db.ubicacion_wkt
+        "id_taller": datos["id_taller"],
+        "id_gestor": datos["id_gestor"],
+        "nombre": datos["nombre"],
+        "direccion": datos["direccion"],
+        "ubicacion_wkt": datos["ubicacion_wkt"],
+        "fecha_registro": datos["fecha_registro"]  # 👈 Corregido el retorno para Pydantic
     }

@@ -13,4 +13,7 @@ class TallerCreate(TallerBase):
 class TallerSimpleResponse(TallerBase):
     id_taller: int
     id_gestor: int
-    fecha_creacion: datetime
+    fecha_registro: datetime
+
+    class Config:
+        from_attributes = True

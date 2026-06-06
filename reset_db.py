@@ -148,7 +148,8 @@ def create_test_data():
             id_gestor=perfil_gestor.id_gestor,
             nombre='Taller Central Automotriz',
             direccion='Av. Busch, 2do Anillo, Santa Cruz',
-            telefono='+591 3 3345678'
+            telefono='+591 3 3345678',
+            ubicacion='POINT(-63.1715 -17.7833)'  # Coordenadas WKT para la ubicación del taller
         )
         db.add(taller_central)
         db.commit()
