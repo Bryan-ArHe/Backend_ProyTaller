@@ -50,4 +50,4 @@ class Tecnico(Base):
     )
 
     def __repr__(self):
-        return f"<Tecnico(id={self.id_tecnico}, especialidad='{self.especialidad}', estado='{self.estado_disponibilidad}')>"
+        return f"<Tecnico(id={self.id_tecnico}, especialidad='{self.especialidad}', estado='{self.disponibilidad}')>"

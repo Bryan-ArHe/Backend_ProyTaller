@@ -2,12 +2,12 @@
 main.py - Punto de entrada de la aplicación FastAPI
 Inicializa la aplicación, crea las tablas en BD y registra los routers
 """
-import models  # Importar modelos para registrar con SQLAlchemy
+from models.database import Base, engine
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from config import get_settings
 from routers import auth, dashboard, vehiculos, incidentes, usuarios, roles, bitacora, talleres, tecnicos, zona_cobertura, solicitudes
-from models.database import Base, engine
+
 
 
 

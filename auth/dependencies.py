@@ -87,7 +87,7 @@ def get_current_gestor_id(current_user: Usuario = Depends(get_current_user)) -> 
     rol_nombre = getattr(rol_obj, "nombre", "Cliente") if rol_obj else "Cliente"
     
     # Soportamos todas las variaciones de nombres comunes en los seeds
-    if rol_nombre != "GestorTaller" and rol_nombre != "Gestor de Taller" and rol_nombre != "Administrador":
+    if rol_nombre != "Gestor" and rol_nombre != "Gestor" and rol_nombre != "Administrador":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Acceso denegado. Se requiere el rol de Gestor de Taller."

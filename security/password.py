@@ -4,6 +4,7 @@ Utiliza bcrypt directamente para máxima seguridad
 """
 
 import bcrypt
+import hashlib
 
 def hash_password(password: str) -> str:
     """
@@ -37,26 +38,26 @@ def hash_password(password: str) -> str:
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """
-    Verifica que una contraseña en texto plano coincida con su hash de bcrypt.
-    
-    Args:
-        plain_password: Contraseña en texto plano (del usuario)
-        hashed_password: Contraseña hasheada (de la BD) como string
-        
-    Returns:
-        True si la contraseña es correcta, False en caso contrario
-        
-    Ejemplo:
-        >>> es_valida = verify_password("miContraseña123", hashed_from_db)
-        >>> print(es_valida)  # True o False
+    Verifica que una contraseña en texto plano coincida con su hash de bcrypt
+    o con el hash defensivo SHA-256 usado en el script de simulación Multi-tenant.
     """
     try:
+        # 1. 🌟 COMPROBACIÓN DEL SEEDER (SHA-256 Plano):
+        # Si el hash en la BD mide 64 caracteres y no tiene el prefijo '$2b$',
+        # calculamos el SHA-256 en caliente para darle paso inmediato.
+        if len(hashed_password) == 64 and not hashed_password.startswith("$"):
+            hash_login = hashlib.sha256(plain_password.encode('utf-8')).hexdigest()
+            if hash_login == hashed_password:
+                return True
+
+        # 2. VERIFICACIÓN ESTÁNDAR DE BCRYPT (Producción local)
         # Limitar a 72 caracteres (limitación de bcrypt)
         plain_password_bytes = plain_password[:72].encode('utf-8')
         hashed_password_bytes = hashed_password.encode('utf-8')
         
-        # Verificar
+        # Verificar de forma nativa
         return bcrypt.checkpw(plain_password_bytes, hashed_password_bytes)
+        
     except (ValueError, TypeError):
         # Si hay algún error, retornar False
         return False

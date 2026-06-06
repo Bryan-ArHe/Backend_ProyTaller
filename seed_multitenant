@@ -1,0 +1,191 @@
+# seed_multitenant.py
+import hashlib
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+from models.database import SessionLocal
+
+def hash_seguro_defensivo(password: str) -> str:
+    return hashlib.sha256(password.encode('utf-8')).hexdigest()
+
+def populate_database():
+    db: Session = SessionLocal()
+    try:
+        print("🚀 Iniciando el poblamiento de datos Multi-tenant (Herencia 1:1 Corregida)...")
+
+        # Limpiamos remanentes en orden inverso de dependencias para evitar colisiones de FK
+        db.execute(text("TRUNCATE TABLE tecnico, taller, gestor_taller, usuario, rol CASCADE;"))
+        db.commit()
+
+        # =====================================================================
+        # 0. CREACIÓN DE ROLES (RBAC)
+        # =====================================================================
+        print("🔑 Creando roles del sistema...")
+        res_r_gestor = db.execute(text("""
+            INSERT INTO rol (nombre, descripcion) 
+            VALUES ('gestor', 'Administrador de talleres y personal sucursal')
+            RETURNING id_rol;
+        """))
+        id_rol_gestor = res_r_gestor.fetchone()[0]
+
+        res_r_tecnico = db.execute(text("""
+            INSERT INTO rol (nombre, descripcion) 
+            VALUES ('tecnico', 'Operario y mecánico de soporte de incidentes')
+            RETURNING id_rol;
+        """))
+        id_rol_tecnico = res_r_tecnico.fetchone()[0]
+
+
+        # =====================================================================
+        # 1. HEMISFERIO NORTE (Tenant 1)
+        # =====================================================================
+        print("🌍 Insertando datos para el Hemisferio Norte...")
+        
+        # Gestor de Usuario
+        res_u_norte = db.execute(text("""
+            INSERT INTO usuario (id_rol, nombre, apellido, email, telefono, password_hash, estado_cuenta, fecha_registro)
+            VALUES (:id_r, 'Carlos', 'Mendoza', 'gestor.norte@taller.com', '+59170000001', :hash_pwd, 'ACTIVO', NOW())
+            RETURNING id_usuario;
+        """), {"id_r": id_rol_gestor, "hash_pwd": hash_seguro_defensivo("gestor123")})
+        id_user_norte = res_u_norte.fetchone()[0]
+
+        # 🌟 CORRECCIÓN DE HERENCIA: id_gestor es la PK/FK que recibe el id_usuario raíz
+        db.execute(text("""
+            INSERT INTO gestor_taller (id_gestor, razon_social, nit, activo)
+            VALUES (:id_g, 'Talleres del Norte Corp', '123456789', true);
+        """), {"id_g": id_user_norte})
+        id_gestor_norte = id_user_norte # El ID de gestor es idéntico al ID de usuario
+
+        # Talleres Norte (Miami y Madrid)
+        res_t_n1 = db.execute(text("""
+            INSERT INTO taller (id_gestor, nombre, direccion, telefono, ubicacion, fecha_registro)
+            VALUES (:id_g, 'Norteño Express - Miami', 'Downtown Miami, FL', '+13055550001', ST_GeomFromText('POINT(-80.191790 25.761680)', 4326), NOW())
+            RETURNING id_taller;
+        """), {"id_g": id_gestor_norte})
+        id_taller_n1 = res_t_n1.fetchone()[0]
+
+        res_t_n2 = db.execute(text("""
+            INSERT INTO taller (id_gestor, nombre, direccion, telefono, ubicacion, fecha_registro)
+            VALUES (:id_g, 'EuroTaller - Madrid', 'Av. de la Castellana, Madrid', '+34911234567', ST_GeomFromText('POINT(-3.688344 40.453054)', 4326), NOW())
+            RETURNING id_taller;
+        """), {"id_g": id_gestor_norte})
+        id_taller_n2 = res_t_n2.fetchone()[0]
+
+        # Técnicos Taller Norte 1 (tecnico1 y tecnico2)
+        for i in [1, 2]:
+            res_u = db.execute(text("""
+                INSERT INTO usuario (id_rol, nombre, apellido, email, telefono, password_hash, estado_cuenta, fecha_registro)
+                VALUES (:id_r, :nom, :ape, :email, :tel, :hash_pwd, 'ACTIVO', NOW()) RETURNING id_usuario;
+            """), {
+                "id_r": id_rol_tecnico, 
+                "nom": f"John_{i}", "ape": "Doe", 
+                "email": f"tecnico{i}.norte@example.com", "tel": f"+10000000{i}",
+                "hash_pwd": hash_seguro_defensivo("tecnico123")
+            })
+            id_u_tec = res_u.fetchone()[0]
+            
+            db.execute(text("""
+                INSERT INTO tecnico (id_tecnico, id_taller, id_gestor, especialidad, disponibilidad)
+                VALUES (:id_t, :id_tal, :id_g, 'Mecánica General', 'Libre');
+            """), {"id_t": id_u_tec, "id_tal": id_taller_n1, "id_g": id_gestor_norte})
+
+        # Técnicos Taller Norte 2 (tecnico3 y tecnico4)
+        for i in [3, 4]:
+            res_u = db.execute(text("""
+                INSERT INTO usuario (id_rol, nombre, apellido, email, telefono, password_hash, estado_cuenta, fecha_registro)
+                VALUES (:id_r, :nom, :ape, :email, :tel, :hash_pwd, 'ACTIVO', NOW()) RETURNING id_usuario;
+            """), {
+                "id_r": id_rol_tecnico, 
+                "nom": f"Robert_{i}", "ape": "Smith", 
+                "email": f"tecnico{i}.norte@example.com", "tel": f"+10000000{i}",
+                "hash_pwd": hash_seguro_defensivo("tecnico123")
+            })
+            id_u_tec = res_u.fetchone()[0]
+            
+            db.execute(text("""
+                INSERT INTO tecnico (id_tecnico, id_taller, id_gestor, especialidad, disponibilidad)
+                VALUES (:id_t, :id_tal, :id_g, 'Sistemas de Inyección', 'Libre');
+            """), {"id_t": id_u_tec, "id_tal": id_taller_n2, "id_g": id_gestor_norte})
+
+
+        # =====================================================================
+        # 2. HEMISFERIO SUR (Tenant 2)
+        # =====================================================================
+        print("🌍 Insertando datos para el Hemisferio Sur...")
+        
+        # Gestor de Usuario Sur
+        res_u_sur = db.execute(text("""
+            INSERT INTO usuario (id_rol, nombre, apellido, email, telefono, password_hash, estado_cuenta, fecha_registro)
+            VALUES (:id_r, 'Andrés', 'Silva', 'gestor.sur@taller.com', '+59170000002', :hash_pwd, 'ACTIVO', NOW())
+            RETURNING id_usuario;
+        """), {"id_r": id_rol_gestor, "hash_pwd": hash_seguro_defensivo("gestor123")})
+        id_user_sur = res_u_sur.fetchone()[0]
+
+        # 🌟 CORRECCIÓN DE HERENCIA: id_gestor es la PK/FK que recibe el id_usuario raíz
+        db.execute(text("""
+            INSERT INTO gestor_taller (id_gestor, razon_social, nit, activo)
+            VALUES (:id_g, 'Consorcio Mecánico del Sur', '987654321', true);
+        """), {"id_g": id_user_sur})
+        id_gestor_sur = id_user_sur
+
+        # Talleres Sur (Santa Cruz y Buenos Aires)
+        res_t_s1 = db.execute(text("""
+            INSERT INTO taller (id_gestor, nombre, direccion, telefono, ubicacion, fecha_registro)
+            VALUES (:id_g, 'Taller Central - Santa Cruz', 'Av. Busch, 2do Anillo', '+59170000011', ST_GeomFromText('POINT(-63.182130 -17.783120)', 4326), NOW())
+            RETURNING id_taller;
+        """), {"id_g": id_gestor_sur})
+        id_taller_s1 = res_t_s1.fetchone()[0]
+
+        res_t_s2 = db.execute(text("""
+            INSERT INTO taller (id_gestor, nombre, direccion, telefono, ubicacion, fecha_registro)
+            VALUES (:id_g, 'Taller Austral - Buenos Aires', 'Av. Corrientes, Buenos Aires', '+59170000022', ST_GeomFromText('POINT(-58.381592 -34.603722)', 4326), NOW())
+            RETURNING id_taller;
+        """), {"id_g": id_gestor_sur})
+        id_taller_s2 = res_t_s2.fetchone()[0]
+
+        # Técnicos Taller Sur 1 (tecnico1 y tecnico2)
+        for i in [1, 2]:
+            res_u = db.execute(text("""
+                INSERT INTO usuario (id_rol, nombre, apellido, email, telefono, password_hash, estado_cuenta, fecha_registro)
+                VALUES (:id_r, :nom, :ape, :email, :tel, :hash_pwd, 'ACTIVO', NOW()) RETURNING id_usuario;
+            """), {
+                "id_r": id_rol_tecnico, 
+                "nom": f"Hugo_{i}", "ape": "Chavez", 
+                "email": f"tecnico{i}.sur@example.com", "tel": f"+5917000001{i}",
+                "hash_pwd": hash_seguro_defensivo("tecnico123")
+            })
+            id_u_tec = res_u.fetchone()[0]
+            
+            db.execute(text("""
+                INSERT INTO tecnico (id_tecnico, id_taller, id_gestor, especialidad, disponibilidad)
+                VALUES (:id_t, :id_tal, :id_g, 'Alineación y Balanceo', 'Libre');
+            """), {"id_t": id_u_tec, "id_tal": id_taller_s1, "id_g": id_gestor_sur})
+
+        # Técnicos Taller Sur 2 (tecnico3 y tecnico4)
+        for i in [3, 4]:
+            res_u = db.execute(text("""
+                INSERT INTO usuario (id_rol, nombre, apellido, email, telefono, password_hash, estado_cuenta, fecha_registro)
+                VALUES (:id_r, :nom, :ape, :email, :tel, :hash_pwd, 'ACTIVO', NOW()) RETURNING id_usuario;
+            """), {
+                "id_r": id_rol_tecnico, 
+                "nom": f"Diego_{i}", "ape": "Maradona", 
+                "email": f"tecnico{i}.sur@example.com", "tel": f"+5917000002{i}",
+                "hash_pwd": hash_seguro_defensivo("tecnico123")
+            })
+            id_u_tec = res_u.fetchone()[0]
+            
+            db.execute(text("""
+                INSERT INTO tecnico (id_tecnico, id_taller, id_gestor, especialidad, disponibilidad)
+                VALUES (:id_t, :id_tal, :id_g, 'Electrónica Automotriz', 'Libre');
+            """), {"id_t": id_u_tec, "id_tal": id_taller_s2, "id_g": id_gestor_sur})
+
+        db.commit()
+        print("✅ ¡BASE DE DATOS POBLADA CON ÉXITO RELACIONAL, RBAC Y HERENCIA 1:1 PERFECTA!")
+
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Error crítico al poblar la base de datos: {str(e)}")
+    finally:
+        db.close()
+
+if __name__ == "__main__":
+    populate_database()

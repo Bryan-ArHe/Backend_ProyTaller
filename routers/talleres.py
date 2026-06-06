@@ -1,10 +1,14 @@
+from ast import List
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func
+import crud
 from models.taller import Taller
+from models.user import Usuario
 from schemas.taller import TallerSimpleResponse, TallerCreate
 from dependencies import get_db
-from auth.dependencies import get_current_gestor_id
+from auth.dependencies import get_current_gestor_id, get_current_user
 
 router = APIRouter(prefix="/talleres", tags=["Talleres"])
 
@@ -32,11 +36,19 @@ def listar_talleres_por_tenant(
             "nombre": datos["nombre"],
             "direccion": datos["direccion"],
             "ubicacion_wkt": datos["ubicacion_wkt"],
-            # ⬇️ Leemos de 'fecha_registro' (BD) y alimentamos 'fecha_registro' (Pydantic)
             "fecha_registro": datos["fecha_registro"]  
         })
         
     return resultado
+
+@router.get("/", response_model=list[TallerSimpleResponse]) # 👈 Cambiado aquí
+def listar_talleres(
+    db: Session = Depends(get_db),
+    usuario_actual: Usuario = Depends(get_current_user)
+):
+    talleres = crud.taller.get_talleres(db, usuario_actual=usuario_actual)
+    return talleres
+
 
 
 @router.post("/", response_model=TallerSimpleResponse, status_code=201)
@@ -76,7 +88,6 @@ def obtener_detalle_taller(
     db: Session = Depends(get_db),
     id_gestor: int = Depends(get_current_gestor_id)
 ):
-    # 1. BUG RESUELTO: Cambiado Taller.created_at por Taller.fecha_registro
     taller_db = db.query(
         Taller.id_taller,
         Taller.id_gestor,

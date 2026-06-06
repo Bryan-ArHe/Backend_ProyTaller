@@ -1,11 +1,12 @@
 ﻿# -*- coding: utf-8 -*-
 """
 reset_db.py - Script optimizado para reiniciar la base de datos y cargar datos de prueba
-Alineado estrictamente con el diseño físico de 27 tablas del 2do Parcial.
+Alineado estrictamente con el diseño físico de 27 tablas del 2do Parcial y Multi-tenant.
 Uso: python reset_db.py
 """
 import sys
-from sqlalchemy import text
+import hashlib
+from sqlalchemy import text, func
 from models.database import SessionLocal, engine, Base
 
 # === IMPORTACIONES OBLIGATORIAS ===
@@ -15,7 +16,6 @@ from models.taller import Taller
 from models.tecnico import Tecnico
 from models.incidente import Incidente
 from models.solicitud import SolicitudServicio
-# Añadimos la importación de los modelos extendidos para que SQLAlchemy reconozca las tablas hijas
 from models.cliente import Cliente
 from models.gestor import GestorTaller 
 from models.ubicacion_tracking import UbicacionTracking
@@ -26,7 +26,9 @@ from models.repuesto import Repuesto
 from models.bitacora import Bitacora
 # =============================================
 
-from security.password import hash_password
+def hash_seguro_defensivo(password: str) -> str:
+    """Genera hash SHA-256 compatible con el puente de seguridad de la autenticación"""
+    return hashlib.sha256(password.encode('utf-8')).hexdigest()
 
 
 def reset_database():
@@ -65,26 +67,26 @@ def reset_database():
 
 
 def create_test_data():
-    """Crea datos de prueba respetando la jerarquía relacional y restricciones ACID"""
+    """Crea datos de prueba respetando la jerarquía relacional y restricciones Multi-tenant"""
     db = SessionLocal()
     try:
-        print('\n📋 CREANDO ROLES...')
+        print('\n📋 CREANDO ROLES BASE (RBAC)...')
         roles_data = [
             Rol(nombre='Administrador', descripcion='Administrador del sistema con acceso completo'),
             Rol(nombre='Tecnico', descripcion='Técnico de taller para atención de emergencias'),
             Rol(nombre='Cliente', descripcion='Cliente/Usuario final para reportar incidentes'),
-            Rol(nombre='GestorTaller', descripcion='Gestor de taller para administrar recursos'),
+            Rol(nombre='Gestor', descripcion='Gestor de taller para administrar recursos'),
         ]
         for r in roles_data:
             db.add(r)
-        db.commit()
+        db.flush() # Sincroniza IDs en caliente
         print(f'   ✓ {len(roles_data)} roles creados')
         
-        # Obtener IDs de roles
-        admin_rol = db.query(Rol).filter(Rol.nombre == 'Administrador').first()
-        tecnico_rol = db.query(Rol).filter(Rol.nombre == 'Tecnico').first()
-        cliente_rol = db.query(Rol).filter(Rol.nombre == 'Cliente').first()
-        gestor_rol = db.query(Rol).filter(Rol.nombre == 'GestorTaller').first()
+        # Mapeo de objetos de roles para asignaciones posteriores
+        admin_rol = next(r for r in roles_data if r.nombre == 'Administrador')
+        tecnico_rol = next(r for r in roles_data if r.nombre == 'Tecnico')
+        cliente_rol = next(r for r in roles_data if r.nombre == 'Cliente')
+        gestor_rol = next(r for r in roles_data if r.nombre == 'Gestor')
         
         print('\n🔐 CREANDO PERMISOS...')
         permisos = [
@@ -106,77 +108,157 @@ def create_test_data():
             Permiso(nombre='asignar_tecnico', descripcion='Asignar técnico a solicitud', recurso='solicitud_servicio', accion='asignar'),
             Permiso(nombre='leer_bitacora', descripcion='Ver bitácora de auditoría', recurso='bitacora', accion='leer'),
             Permiso(nombre='ver_dashboard', descripcion='Ver dashboard', recurso='dashboard', accion='ver'),
+
+            Permiso(nombre='crear_taller', descripcion='Crear nuevo taller', recurso='taller', accion='crear'),
+            Permiso(nombre='leer_taller', descripcion='Visualizar todos los talleres en el sistema', recurso='taller', accion='leer'),
+            Permiso(nombre='actualizar_taller', descripcion='Actualizar información del taller', recurso='taller', accion='actualizar'),
+            Permiso(nombre='eliminar_taller', descripcion='Eliminar taller', recurso='taller', accion='eliminar'),
+           
+            Permiso(nombre='crear_tecnico', descripcion='Crear nuevo técnico', recurso='tecnico', accion='crear'),
+             Permiso(nombre='leer_tecnico', descripcion='Visualizar todos los técnicos en el sistema', recurso='tecnico', accion='leer'),
+            Permiso(nombre='actualizar_tecnico', descripcion='Actualizar información del técnico', recurso='tecnico', accion='actualizar'),
+            Permiso(nombre='eliminar_tecnico', descripcion='Eliminar técnico', recurso='tecnico', accion='eliminar'),
         ]
         for p in permisos:
             db.add(p)
-        db.commit()
+        db.flush()
         print(f'   ✓ {len(permisos)} permisos creados')
         
         print('\n👥 ASIGNANDO PERMISOS A ROLES...')
-        admin_rol.permisos = db.query(Permiso).all()
-        tecnico_rol.permisos = db.query(Permiso).filter(Permiso.nombre.in_(['leer_incidente', 'actualizar_incidente', 'leer_solicitud_servicio', 'actualizar_solicitud_servicio', 'leer_usuario', 'ver_dashboard'])).all()
-        cliente_rol.permisos = db.query(Permiso).filter(Permiso.nombre.in_(['crear_incidente', 'leer_incidente', 'crear_vehiculo', 'leer_vehiculo', 'actualizar_vehiculo', 'leer_solicitud_servicio'])).all()
-        gestor_rol.permisos = db.query(Permiso).filter(Permiso.nombre.in_(['crear_usuario', 'leer_usuario', 'actualizar_usuario', 'crear_solicitud_servicio', 'leer_solicitud_servicio', 'actualizar_solicitud_servicio', 'asignar_tecnico', 'leer_incidente', 'ver_dashboard'])).all()
-        db.commit()
+        admin_rol.permisos = permisos
+        tecnico_rol.permisos = [p for p in permisos if p.nombre in ['leer_incidente', 'actualizar_incidente', 'leer_solicitud_servicio', 'actualizar_solicitud_servicio', 'leer_usuario', 'ver_dashboard']]
+        cliente_rol.permisos = [p for p in permisos if p.nombre in ['crear_incidente', 'leer_incidente', 'crear_vehiculo', 'leer_vehiculo', 'actualizar_vehiculo', 'leer_solicitud_servicio']]
+        gestor_rol.permisos = [p for p in permisos if p.nombre in ['crear_usuario', 'leer_usuario', 'actualizar_usuario', 'crear_solicitud_servicio', 'leer_solicitud_servicio', 'actualizar_solicitud_servicio', 'asignar_tecnico', 'leer_incidente', 'ver_dashboard']]
+        db.flush()
         print('   ✓ Permisos asignados a roles')
         
-        print('\n👤 PASO 1: CREANDO CUENTAS DE USUARIO BASE...')
-        password_hash = hash_password('12345678')
-        
-        u_admin = Usuario(nombre='Admin', apellido='System', email='admin@example.com', telefono='+1001', password_hash=password_hash, id_rol=admin_rol.id_rol, estado_cuenta=EstadoCuenta.ACTIVO)
-        u_tecnico = Usuario(nombre='Carlos', apellido='Ruiz', email='tecnico@example.com', telefono='+1002', password_hash=password_hash, id_rol=tecnico_rol.id_rol, estado_cuenta=EstadoCuenta.ACTIVO)
-        u_cliente = Usuario(nombre='Juan', apellido='Pérez', email='cliente@example.com', telefono='+1003', password_hash=password_hash, id_rol=cliente_rol.id_rol, estado_cuenta=EstadoCuenta.ACTIVO)
-        u_gestor = Usuario(nombre='Roberto', apellido='García', email='gestor@example.com', telefono='+1004', password_hash=password_hash, id_rol=gestor_rol.id_rol, estado_cuenta=EstadoCuenta.ACTIVO)
-        
-        db.add_all([u_admin, u_tecnico, u_cliente, u_gestor])
-        db.commit()
-        print('   ✓ Cuentas de usuario persistidas.')
+        # =====================================================================
+        # 👤 SECCIÓN 1: USUARIO ADMINISTRADOR CENTRAL
+        # =====================================================================
+        print('\n👤 CREANDO CUENTA DE ADMINISTRADOR CENTRAL...')
+        u_admin = Usuario(
+            nombre='Admin', apellido='System', 
+            email='admin@example.com', telefono='+1001', 
+            password_hash=hash_seguro_defensivo('12345678'), 
+            id_rol=admin_rol.id_rol, estado_cuenta=EstadoCuenta.ACTIVO
+        )
+        db.add(u_admin)
+        db.flush()
 
-        print('\n👥 PASO 2: EXTENDIENDO PERFILES (HERENCIA 1:1)...')
-        # Sembramos el Cliente real amarrado a su id_usuario
-        perfil_cliente = Cliente(id_cliente=u_cliente.id_usuario, nombres='Juan', apellidos='Pérez', ci='1234567-SC')
-        # Sembramos el Gestor real amarrado a su id_usuario
-        perfil_gestor = GestorTaller(id_gestor=u_gestor.id_usuario, razon_social='Corporación Mecánica García S.R.L.', nit='987654321-011')
+        # =====================================================================
+        # 🌍 SECCIÓN 2: TENANT HEMISFERIO NORTE
+        # =====================================================================
+        print('\n🌍 CONFIGURANDO TENANT: HEMISFERIO NORTE...')
         
-        db.add_all([perfil_cliente, perfil_gestor])
-        db.commit()
-        print('   ✓ Perfiles de Cliente y Gestor mapeados correctamente.')
+        u_gestor_norte = Usuario(
+            nombre='Carlos', apellido='Mendoza', 
+            email='gestor.norte@taller.com', telefono='+59170000001',
+            password_hash=hash_seguro_defensivo('gestor123'),
+            id_rol=gestor_rol.id_rol, estado_cuenta=EstadoCuenta.ACTIVO
+        )
+        db.add(u_gestor_norte)
+        db.flush()
+
+        perfil_gestor_norte = GestorTaller(usuario=u_gestor_norte, razon_social='Talleres del Norte Corp', nit='123456789', activo=True)
+        db.add(perfil_gestor_norte)
+        db.flush()
+
+        # Talleres del Norte (Santa Cruz de la Sierra)
+        taller_n1 = Taller(
+            id_gestor=perfil_gestor_norte.id_gestor,
+            nombre='Norteño Express - Santa Cruz',
+            direccion='Downtown Santa Cruz, Bolivia',
+            telefono='+59170000001',
+            ubicacion=func.ST_GeomFromText('POINT(-63.182130 -17.783120)', 4326),
+            fecha_registro=func.NOW()
+        )
+        taller_n2 = Taller(
+            id_gestor=perfil_gestor_norte.id_gestor,
+            nombre='EuroTaller - Santa Cruz',
+            direccion='Av. Banzer, Bolivia',
+            telefono='+59170000002',
+            ubicacion=func.ST_GeomFromText('POINT(-63.182130 -17.783120)', 4326),
+            fecha_registro=func.NOW()
+        )
+        db.add_all([taller_n1, taller_n2])
+        db.flush()
+
+        # Técnicos del Taller Norte 1 (tecnico1 y tecnico2)
+        for i, (nom, ape) in enumerate([("John", "Doe"), ("Robert", "Smith")], start=1):
+            u_tec = Usuario(nombre=nom, apellido=ape, email=f"tecnico{i}.norte@example.com", telefono=f"+10000000{i}", password_hash=hash_seguro_defensivo("tecnico123"), id_rol=tecnico_rol.id_rol, estado_cuenta=EstadoCuenta.ACTIVO)
+            db.add(u_tec); db.flush()
+            t_tec = Tecnico(usuario=u_tec, id_taller=taller_n1.id_taller, id_gestor=perfil_gestor_norte.id_gestor, especialidad='Mecánica General', disponibilidad='Libre')
+            db.add(t_tec)
+
+        # Técnicos del Taller Norte 2 (tecnico3 y tecnico4)
+        for i, (nom, ape) in enumerate([("Jean", "Dupont"), ("Hans", "Müller")], start=3):
+            u_tec = Usuario(nombre=nom, apellido=ape, email=f"tecnico{i}.norte@example.com", telefono=f"+10000000{i}", password_hash=hash_seguro_defensivo("tecnico123"), id_rol=tecnico_rol.id_rol, estado_cuenta=EstadoCuenta.ACTIVO)
+            db.add(u_tec); db.flush()
+            t_tec = Tecnico(usuario=u_tec, id_taller=taller_n2.id_taller, id_gestor=perfil_gestor_norte.id_gestor, especialidad='Sistemas de Inyección', disponibilidad='Libre')
+            db.add(t_tec)
+
+        # =====================================================================
+        # 🌍 SECCIÓN 3: TENANT HEMISFERIO SUR
+        # =====================================================================
+        print('\n🌍 CONFIGURANDO TENANT: HEMISFERIO SUR...')
         
-        print('\n🏭 PASO 3: CREANDO ESTABLECIMIENTOS FÍSICOS (TALLERES)...')
-        # El taller físico requiere obligatoriamente el id del gestor corporativo dueño
-        taller_central = Taller(
-            id_gestor=perfil_gestor.id_gestor,
-            nombre='Taller Central Automotriz',
+        u_gestor_sur = Usuario(
+            nombre='Andrés', apellido='Silva', 
+            email='gestor.sur@taller.com', telefono='+59170000002',
+            password_hash=hash_seguro_defensivo('gestor123'),
+            id_rol=gestor_rol.id_rol, estado_cuenta=EstadoCuenta.ACTIVO
+        )
+        db.add(u_gestor_sur)
+        db.flush()
+
+        perfil_gestor_sur = GestorTaller(usuario=u_gestor_sur, razon_social='Consorcio Mecánico del Sur', nit='987654321', activo=True)
+        db.add(perfil_gestor_sur)
+        db.flush()
+
+        # Talleres del Sur (Santa Cruz de la Sierra)
+        taller_s1 = Taller(
+            id_gestor=perfil_gestor_sur.id_gestor,
+            nombre='Taller Central - Santa Cruz',
             direccion='Av. Busch, 2do Anillo, Santa Cruz',
-            telefono='+591 3 3345678',
-            ubicacion='POINT(-63.1715 -17.7833)'  # Coordenadas WKT para la ubicación del taller
+            telefono='+59170000011',
+            ubicacion=func.ST_GeomFromText('POINT(-63.182130 -17.783120)', 4326),
+            fecha_registro=func.NOW()
         )
-        db.add(taller_central)
-        db.commit()
-        print(f'   ✓ Taller "{taller_central.nombre}" creado bajo la administración del Gestor ID: {taller_central.id_gestor}')
-        
-        print('\n🔧 PASO 4: REGISTRANDO PERSONAL ASIGNADO (TÉCNICOS)...')
-        # El técnico ahora hereda de su usuario y se vincula físicamente al taller creado.
-        perfil_tecnico = Tecnico(
-            id_tecnico=u_tecnico.id_usuario,
-            id_taller=taller_central.id_taller,
-            especialidad='Mecánica y Sistemas de Inyección',
-            disponibilidad='Libre'  # Sincronizado con el string por defecto del modelo
+        taller_s2 = Taller(
+            id_gestor=perfil_gestor_sur.id_gestor,
+            nombre='Taller Austral - Santa Cruz',
+            direccion='Av. Corrientes,Santa Cruz',
+            telefono='+59170000022',
+            ubicacion=func.ST_GeomFromText('POINT(-63.182130 -17.783120)', 4326),
+            fecha_registro=func.NOW()
         )
-        db.add(perfil_tecnico)
+        db.add_all([taller_s1, taller_s2])
+        db.flush()
+
+        # Técnicos del Taller Sur 1 (tecnico1 y tecnico2)
+        for i, (nom, ape) in enumerate([("Hugo", "Chávez"), ("Mario", "Flores")], start=1):
+            u_tec = Usuario(nombre=nom, apellido=ape, email=f"tecnico{i}.sur@example.com", telefono=f"+5917000001{i}", password_hash=hash_seguro_defensivo("tecnico123"), id_rol=tecnico_rol.id_rol, estado_cuenta=EstadoCuenta.ACTIVO)
+            db.add(u_tec); db.flush()
+            t_tec = Tecnico(usuario=u_tec, id_taller=taller_s1.id_taller, id_gestor=perfil_gestor_sur.id_gestor, especialidad='Alineación y Balanceo', disponibilidad='Libre')
+            db.add(t_tec)
+
+        # Técnicos del Taller Sur 2 (tecnico3 y tecnico4)
+        for i, (nom, ape) in enumerate([("Diego", "Maradona"), ("Lionel", "Messi")], start=3):
+            u_tec = Usuario(nombre=nom, apellido=ape, email=f"tecnico{i}.sur@example.com", telefono=f"+5917000002{i}", password_hash=hash_seguro_defensivo("tecnico123"), id_rol=tecnico_rol.id_rol, estado_cuenta=EstadoCuenta.ACTIVO)
+            db.add(u_tec); db.flush()
+            t_tec = Tecnico(usuario=u_tec, id_taller=taller_s2.id_taller, id_gestor=perfil_gestor_sur.id_gestor, especialidad='Electrónica Automotriz', disponibilidad='Libre')
+            db.add(t_tec)
+
         db.commit()
-        print('   ✓ Historial de Personal Técnico sembrado con éxito.')
-        
-        print('\n✨ Base de datos inicializada exitosamente')
-        print('\n📝 RESUMEN DE LA SIEMBRA:')
-        print(f'   - {len(roles_data)} Roles Base')
-        print(f'   - {len(permisos)} Permisos del Sistema')
-        print(f'   - 4 Entidades Usuario')
-        print(f'   - 1 Actor Cliente Expandido')
-        print(f'   - 1 Actor Gestor Expandido (Tenant Raíz)')
-        print(f'   - 1 Taller Físico Vinculado')
-        print(f'   - 1 Técnico Operativo en Sucursal')
-        
+        print('\n✨ Base de datos consolidada e inicializada exitosamente')
+        print('\n📝 RESUMEN DE LA ARQUITECTURA DISTRIBUIDA:')
+        print(f'   - {len(roles_data)} Roles Base del Sistema (RBAC)')
+        print(f'   - {len(permisos)} Permisos Estrictos Mapeados')
+        print(f'   - 1 Administrador Central del Sistema')
+        print(f'   - 2 Gestores de Talleres distribuidos por Hemisferio (Tenants)')
+        print(f'   - 4 Establecimientos Físicos con PostGIS Activado')
+        print(f'   - 8 Técnicos Operativos distribuidos y aislados')
+
     except Exception as e:
         db.rollback()
         print(f'\n❌ Error crítico al sembrar datos: {e}')
@@ -190,12 +272,12 @@ def create_test_data():
 if __name__ == '__main__':
     try:
         print('=' * 60)
-        print('🔄 REINICIANDO ENTIDADES - ARQUITECTURA 2DO PARCIAL')
+        print('🔄 REINICIANDO ENTIDADES - ARQUITECTURA MULTI-TENANT')
         print('=' * 60)
         reset_database()
         create_test_data()
         print('=' * 60)
-        print('✅ SISTEMA TOTALMENTE CONSOLIDADO')
+        print('✅ SISTEMA TOTALMENTE CONSOLIDADO Y LISTO')
         print('=' * 60)
     except Exception as e:
         print(f'\n❌ Error fatal en ejecución: {e}')
