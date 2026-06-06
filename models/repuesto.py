@@ -14,3 +14,4 @@ class Repuesto(Base):
     precio = Column(Numeric(10, 2), nullable=False)
 
     taller = relationship("Taller", back_populates="repuestos")
+    detalles_servicio = relationship("DetalleServicio", back_populates="repuesto", cascade="all")

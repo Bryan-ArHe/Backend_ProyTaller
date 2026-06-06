@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime
 from sqlalchemy.orm import relationship
+from geoalchemy2 import Geometry
 from sqlalchemy.sql import func
 from models.database import Base
 
@@ -17,8 +18,7 @@ class Tecnico(Base):
     disponibilidad = Column(String, default="Libre")  # 'Libre', 'Ocupado', 'Inactivo'
     
     # Rastreo geográfico operativo para el despacho de emergencias
-    latitud_actual = Column(Float, nullable=True)
-    longitud_actual = Column(Float, nullable=True)
+    ubicacion_actual = Column(Geometry("POINT", srid=4326), nullable=True)
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -43,8 +43,8 @@ class Tecnico(Base):
         back_populates="tecnico"
     )
 
-    tracking_ubicaciones = relationship(
-        "TrackingUbicacion",
+    ubicaciones_tracking = relationship(
+        "UbicacionTracking",
         back_populates="tecnico",
         cascade="all, delete-orphan"
     )

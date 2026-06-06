@@ -18,6 +18,12 @@ from models.solicitud import SolicitudServicio
 # Añadimos la importación de los modelos extendidos para que SQLAlchemy reconozca las tablas hijas
 from models.cliente import Cliente
 from models.gestor import GestorTaller 
+from models.ubicacion_tracking import UbicacionTracking
+from models.proceso_incidente import IncidenteAsignado, Cotizacion
+from models.zona_cobertura import ZonaCobertura
+from models.vehiculo import Vehiculo
+from models.repuesto import Repuesto
+from models.bitacora import Bitacora
 # =============================================
 
 from security.password import hash_password

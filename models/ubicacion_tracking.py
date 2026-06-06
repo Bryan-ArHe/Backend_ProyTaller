@@ -18,4 +18,4 @@ class UbicacionTracking(Base):
     fecha_hora = Column(DateTime(timezone=True), server_default=func.now(), index=True)
 
     # Relación inversa hacia el Técnico
-    tecnico = relationship("Tecnico", back_populates="tracking_ubicaciones")
+    tecnico = relationship("Tecnico", back_populates="ubicaciones_tracking")
