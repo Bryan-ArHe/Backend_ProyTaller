@@ -16,7 +16,7 @@ def listar_incidentes_activos(db: Session = Depends(get_db)):
         Incidente.descripcion,
         Incidente.estado_incidente,
         Incidente.fecha_incidente,
-        func.ST_AsText(Incidente.ubicacion_inicial).label("ubicacion_inicial_wkt")
+        func.ST_AsText(Incidente.ubicacion_averia).label("ubicacion_inicial_wkt")
     ).filter(Incidente.estado_incidente != "resuelto").all()
     
     return [

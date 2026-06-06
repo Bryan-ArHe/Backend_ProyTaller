@@ -15,19 +15,19 @@ def listar_mis_vehiculos(
     # Extraemos solo las columnas necesarias en una tupla plana
     vehiculos_raw = db.query(
         Vehiculo.id_vehiculo,
-        Vehiculo.id_usuario,
+        Vehiculo.id_cliente,
         Vehiculo.placa,
         Vehiculo.marca,
         Vehiculo.modelo,
         Vehiculo.color,
         Vehiculo.anio,
         Vehiculo.fecha_registro
-    ).filter(Vehiculo.id_usuario == current_user.id_usuario).all()
+    ).filter(Vehiculo.id_cliente == current_user.id_usuario).all()
     
     return [
         {
             "id_vehiculo": v[0],
-            "id_usuario": v[1],
+            "id_cliente": v[1],
             "placa": v[2],
             "marca": v[3],
             "modelo": v[4],

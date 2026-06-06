@@ -12,5 +12,6 @@ from models.cliente import Cliente
 from models.gestor import GestorTaller
 from models.repuesto import Repuesto
 from models.proceso_incidente import IncidenteAsignado, Cotizacion
+from models.ubicacion_tracking import UbicacionTracking
 
 

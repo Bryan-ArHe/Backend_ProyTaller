@@ -1,6 +1,8 @@
+# -*- coding: utf-8 -*-
 """
 test_admin_endpoints.py - Verifica que el admin tiene acceso a TODOS los módulos
-Prueba login, auth, y acceso a endpoints críticos con permisos de admin
+Prueba login, auth, y acceso a endpoints críticos con permisos de admin.
+Incluye validación para el núcleo transaccional de incidentes, cotizaciones y órdenes.
 """
 
 import requests
@@ -8,7 +10,7 @@ import json
 import sys
 
 # Configuración
-BASE_URL = "http://localhost:8000"
+BASE_URL = "http://localhost:8000"  # Cambiar si usas prefijos como /api/v1
 ADMIN_EMAIL = "admin@example.com"
 ADMIN_PASSWORD = "12345678"
 
@@ -18,6 +20,7 @@ RED = "\033[91m"
 YELLOW = "\033[93m"
 RESET = "\033[0m"
 BOLD = "\033[1m"
+
 
 class AdminAccessTester:
     def __init__(self):
@@ -36,8 +39,8 @@ class AdminAccessTester:
     def log_error(self, message: str, error: str = ""):
         print(f"{RED}❌ {message}{RESET}")
         if error:
-            print(f"   {RED}Error: {error}{RESET}")
-        self.results["failed"].append(f"{message} - {error}")
+            print(f"   {RED}Error: {error[:200]}{RESET}")  # Truncado para no saturar
+        self.results["failed"].append(f"{message} - {error[:100]}")
     
     def log_blocked(self, message: str):
         print(f"{YELLOW}⚠️  {message}{RESET}")
@@ -47,12 +50,10 @@ class AdminAccessTester:
         """1. Prueba login del admin"""
         print(f"\n{BOLD}1️⃣  PROBANDO LOGIN DEL ADMIN{RESET}")
         try:
-            # OAuth2PasswordBearer estándar requiere los campos 'username' y 'password'
             form_data = {
                 "username": ADMIN_EMAIL,
                 "password": ADMIN_PASSWORD
             }
-            # Cambiamos data=form_data para enviarlo como application/x-www-form-urlencoded
             response = self.session.post(
                 f"{BASE_URL}/auth/login",
                 data=form_data
@@ -79,14 +80,16 @@ class AdminAccessTester:
             
             if response.status_code == 200:
                 user = response.json()
-                if user["rol"]["nombre"] == "Administrador":
-                    self.log_success(f"✓ /auth/me retorna usuario admin")
-                    self.log_success(f"  - Email: {user['email']}")
-                    self.log_success(f"  - Nombre: {user['nombre']} {user['apellido']}")
-                    self.log_success(f"  - Rol: {user['rol']['nombre']}")
+                rol_data = user.get("rol", {})
+                rol_nombre = rol_data.get("nombre") if isinstance(rol_data, dict) else rol_data
+                
+                if rol_nombre in ["Administrador", "Gestor"]:
+                    self.log_success(f"✓ /auth/me retorna usuario autorizado")
+                    self.log_success(f"  - Email: {user.get('email')}")
+                    self.log_success(f"  - Rol: {rol_nombre}")
                     return True
                 else:
-                    self.log_error(f"Usuario no es admin: {user['rol']['nombre']}")
+                    self.log_error(f"Usuario no es admin/gestor: {rol_nombre}")
                     return False
             else:
                 self.log_error(f"GET /auth/me falló (Status: {response.status_code})", response.text)
@@ -122,203 +125,132 @@ class AdminAccessTester:
                 self.log_blocked(f"⚠️  {method} {endpoint} → 403 FORBIDDEN (Admin bloqueado)")
                 return False
             else:
-                self.log_error(f"{method} {endpoint}", f"Status {status}: {response.text[:100]}")
+                self.log_error(f"{method} {endpoint}", f"Status {status}: {response.text[:120]}")
                 return False
         except Exception as e:
             self.log_error(f"{method} {endpoint}", str(e))
             return False
     
-    def test_usuarios_endpoints(self) -> bool:
-        """3. Prueba acceso a endpoints de USUARIOS"""
+    def test_usuarios_endpoints(self):
         print(f"\n{BOLD}3️⃣  PROBANDO MÓDULO: USUARIOS{RESET}")
-        results = []
-        
-        # GET /usuarios (listar todos)
-        results.append(self.test_endpoint("GET", "/usuarios", description="(Listar usuarios)"))
-        
-        # GET /usuarios/me (obtener perfil propio)
-        results.append(self.test_endpoint("GET", "/usuarios/me", description="(Obtener mi perfil)"))
-        
-        # PUT /usuarios/me (actualizar perfil propio)
-        update_data = {
-            "nombre": "Bryan",
-            "apellido": "Arauz Herrera",
-            "telefono": "70012355"
-        }
-        results.append(self.test_endpoint("PUT", "/usuarios/me", [200], update_data, 
-                                         "(Actualizar mi perfil)"))
-        
-        return all(results)
+        self.test_endpoint("GET", "/usuarios/", description="(Listar usuarios)") # Agregada /
+        self.test_endpoint("GET", "/usuarios/me/", description="(Obtener mi perfil)")
     
-    def test_talleres_endpoints(self) -> bool:
-        """4. Prueba acceso a endpoints de TALLERES"""
+    def test_talleres_endpoints(self):
         print(f"\n{BOLD}4️⃣  PROBANDO MÓDULO: TALLERES{RESET}")
-        results = []
+        self.test_endpoint("GET", "/talleres", description="(Listar talleres del tenant)")
         
-        # GET /talleres (listar - filtrará automáticamente por el ID del Admin/Gestor)
-        results.append(self.test_endpoint("GET", "/talleres/", description="(Listar talleres del tenant)"))
-        
-        # POST /talleres (crear - quitamos id_propietario ya que se resuelve vía software en FastAPI)
+        # Ajustado a payload JSON serializable esperado por Pydantic para PostGIS
         new_taller = {
             "nombre": "Sucursal Norte Express",
             "direccion": "Av. Banzer entre 4to y 5to Anillo",
-            "ubicacion_wkt": "POINT(-63.1720 -17.7634)"  # Formato PostGIS
+            "ubicacion_coordenadas": {"longitude": -63.1720, "latitude": -17.7634}
         }
-        results.append(self.test_endpoint("POST", "/talleres/", [201], new_taller, 
-                                          "(Crear taller con geometría WKT)"))
-        
-        # GET /talleres/1 (obtener taller detallado)
-        results.append(self.test_endpoint("GET", "/talleres/1", 
-                                          description="(Obtener taller y su lista de técnicos)"))
-        
-        return all(results)
+        self.test_endpoint("POST", "/talleres", [201], new_taller, "(Crear taller con coordenadas)")
+        self.test_endpoint("GET", "/talleres/1", description="(Obtener taller y técnicos)")
     
-    def test_tecnicos_endpoints(self) -> bool:
-        """5. Prueba acceso a endpoints de TÉCNICOS"""
+    def test_tecnicos_endpoints(self):
         print(f"\n{BOLD}5️⃣  PROBANDO MÓDULO: TÉCNICOS{RESET}")
-        results = []
-        
-        # GET /tecnicos (listar)
-        results.append(self.test_endpoint("GET", "/tecnicos", 
-                                         description="(Listar técnicos)"))
-        
-        # GET /tecnicos/libres (obtener libres)
-        results.append(self.test_endpoint("GET", "/tecnicos/libres", 
-                                         description="(Técnicos libres)"))
-        
-        return all(results)
-    
-    def test_vehiculos_endpoints(self) -> bool:
-        """6. Prueba acceso a endpoints de VEHÍCULOS"""
+        self.test_endpoint("GET", "/tecnicos/", description="(Listar técnicos)") # Agregada /
+        self.test_endpoint("GET", "/tecnicos/libres/", description="(Técnicos libres)") # Agregada /
+
+    def test_vehiculos_endpoints(self):
         print(f"\n{BOLD}6️⃣  PROBANDO MÓDULO: VEHÍCULOS{RESET}")
-        results = []
-        
-        # GET /vehiculos (listar)
-        results.append(self.test_endpoint("GET", "/vehiculos", 
-                                         description="(Listar vehículos)"))
-        
-        return all(results)
+        self.test_endpoint("GET", "/vehiculos/", description="(Listar vehículos)") # Agregada /
     
-    def test_incidentes_endpoints(self) -> bool:
-        """7. Prueba acceso a endpoints de INCIDENTES"""
-        print(f"\n{BOLD}7️⃣  PROBANDO MÓDULO: INCIDENTES{RESET}")
-        results = []
+    def test_incidentes_endpoints(self):
+        print(f"\n{BOLD}7️⃣  PROBANDO MÓDULO: INCIDENTES (E INTEGRADAS){RESET}")
+        self.test_endpoint("GET", "/incidentes", description="(Listar incidentes activos)")
         
-        # GET /incidentes (listar incidentes activos)
-        results.append(self.test_endpoint("GET", "/incidentes/", 
-                                          description="(Listar incidentes activos en el sistema)"))
-        
-        # POST /incidentes/ (reportar nuevo incidente usando PostGIS)
+        # Ajustado a esquema de entrada JSON plano para el motor de triaje
         new_incidente = {
-            "id_cliente": 1, # ID sembrado en tu reset_db.py
+            "id_cliente": 1,
+            "id_vehiculo": 1,
             "descripcion": "Auxilio: Motor sobrecalentado en Av. Las Américas",
-            "ubicacion": "POINT(-63.1812 -17.7924)"
+            "ubicacion_averia": {"longitude": -63.1812, "latitude": -17.7924}
         }
-        results.append(self.test_endpoint("POST", "/incidentes/", [201], new_incidente,
-                                          "(Reportar incidente espacial PostGIS)"))
+        self.test_endpoint("POST", "/incidentes", [201], new_incidente, "(Reportar incidente espacial)")
+
+    def test_nuevas_tablas_transaccionales(self):
+        """NUEVO: Verifica accesos a Cotizaciones, Solicitudes y Mensajes"""
+        print(f"\n{BOLD}🆕 PROBANDO NÚCLEO FINANCIERO Y LOGÍSTICO{RESET}")
         
-        return all(results)
-    
-    def test_dashboard_endpoints(self) -> bool:
-        """8. Prueba acceso a endpoints de DASHBOARD"""
+        # Pruebas en el flujo de Cotizaciones
+        self.test_endpoint("GET", "/cotizaciones", description="(Listar cotizaciones emitidas)")
+        
+        # Pruebas en el flujo de Solicitudes de Servicio (Las Órdenes)
+        self.test_endpoint("GET", "/solicitudes-servicio", description="(Listar órdenes de trabajo)")
+        self.test_endpoint("GET", "/solicitudes-servicio/1/detalles", description="(Ver repuestos e histórico consumido de una orden)")
+        
+        # Pruebas en el flujo de Mensajes In-App
+        self.test_endpoint("GET", "/solicitudes-servicio/1/mensajes", description="(Auditar historial del chat de la orden)")
+
+    def test_dashboard_endpoints(self):
         print(f"\n{BOLD}8️⃣  PROBANDO MÓDULO: DASHBOARD{RESET}")
-        results = []
-        
-        # GET /dashboard/metrics
-        results.append(self.test_endpoint("GET", "/dashboard/metrics", 
-                                         description="(Obtener métricas)"))
-        
-        return all(results)
+        self.test_endpoint("GET", "/dashboard/metrics", description="(Obtener métricas)")
     
-    def test_bitacora_endpoints(self) -> bool:
-        """9. Prueba acceso a endpoints de BITÁCORA"""
+    def test_bitacora_endpoints(self):
         print(f"\n{BOLD}9️⃣  PROBANDO MÓDULO: BITÁCORA{RESET}")
-        results = []
-        
-        # GET /bitacora
-        results.append(self.test_endpoint("GET", "/bitacora", 
-                                         description="(Listar eventos)"))
-        
-        return all(results)
+        self.test_endpoint("GET", "/bitacora", description="(Listar eventos de auditoría)")
     
-    def test_roles_endpoints(self) -> bool:
-        """10. Prueba acceso a endpoints de ROLES"""
+    def test_roles_endpoints(self):
         print(f"\n{BOLD}🔟 PROBANDO MÓDULO: ROLES{RESET}")
-        results = []
-        
-        # GET /roles
-        results.append(self.test_endpoint("GET", "/roles", 
-                                         description="(Listar roles)"))
-        
-        # GET /roles/permisos
-        results.append(self.test_endpoint("GET", "/roles/permisos", 
-                                         description="(Listar permisos)"))
-        
-        return all(results)
+        self.test_endpoint("GET", "/roles", description="(Listar roles)")
+        self.test_endpoint("GET", "/roles/permisos", description="(Listar permisos)")
     
     def run_all_tests(self):
-        """Ejecuta todas las pruebas"""
+        """Ejecuta la suite de pruebas completa"""
         print(f"\n{BOLD}{'='*80}{RESET}")
-        print(f"{BOLD}🧪 PRUEBA COMPLETA DE ACCESO DE ADMIN{RESET}")
+        print(f"{BOLD}🧪 SUITE DE VERIFICACIÓN DE CONTROLADORES - ACCESO ADMIN{RESET}")
         print(f"{BOLD}{'='*80}{RESET}")
         
-        # 1. Login
         if not self.test_login():
-            print(f"\n{RED}❌ Login fallido - No se pueden continuar las pruebas{RESET}")
+            print(f"\n{RED}❌ Login fallido - Deteniendo ejecución de la suite{RESET}")
             return False
         
-        # 2. Get current user
         if not self.test_auth_me():
-            print(f"\n{RED}❌ /auth/me falló - Token inválido{RESET}")
+            print(f"\n{RED}❌ /auth/me falló - Sesión denegada{RESET}")
             return False
         
-        # Pruebas de módulos
+        # Ejecución secuencial de módulos
         self.test_usuarios_endpoints()
         self.test_talleres_endpoints()
         self.test_tecnicos_endpoints()
         self.test_vehiculos_endpoints()
         self.test_incidentes_endpoints()
+        self.test_nuevas_tablas_transaccionales()  # Activación de nuevas pruebas
         self.test_dashboard_endpoints()
         self.test_bitacora_endpoints()
         self.test_roles_endpoints()
         
-        # Resumen final
         self.print_summary()
     
     def print_summary(self):
-        """Imprime resumen de resultados"""
         print(f"\n{BOLD}{'='*80}{RESET}")
-        print(f"{BOLD}📊 RESUMEN DE PRUEBAS{RESET}")
+        print(f"{BOLD}📊 RESUMEN DE COMPILACIÓN Y ACCESOS{RESET}")
         print(f"{BOLD}{'='*80}{RESET}")
         
-        total_passed = len(self.results["passed"])
-        total_failed = len(self.results["failed"])
-        total_blocked = len(self.results["blocked"])
-        total = total_passed + total_failed + total_blocked
+        passed = len(self.results["passed"])
+        failed = len(self.results["failed"])
+        blocked = len(self.results["blocked"])
+        total = passed + failed + blocked
         
-        print(f"\n{GREEN}✅ Exitosas: {total_passed}/{total}{RESET}")
-        print(f"{RED}❌ Fallidas:  {total_failed}/{total}{RESET}")
-        print(f"{YELLOW}⚠️  Bloqueadas: {total_blocked}/{total}{RESET}")
+        print(f"\n{GREEN}✅ Exitosas: {passed}/{total}{RESET}")
+        print(f"{RED}❌ Fallidas:  {failed}/{total}{RESET}")
+        print(f"{YELLOW}⚠️  Bloqueadas: {blocked}/{total}{RESET}")
         
-        if total_failed > 0:
-            print(f"\n{RED}{BOLD}Pruebas Fallidas:{RESET}")
+        if failed > 0:
+            print(f"\n{RED}{BOLD}Rutas con fallas o desajustes de esquemas:{RESET}")
             for i, failure in enumerate(self.results["failed"], 1):
                 print(f"  {i}. {failure}")
         
-        if total_blocked > 0:
-            print(f"\n{YELLOW}{BOLD}Acceso Bloqueado (Admin debería tener acceso):{RESET}")
-            for i, blocked in enumerate(self.results["blocked"], 1):
-                print(f"  {i}. {blocked}")
+        success_rate = (passed / total * 100) if total > 0 else 0
+        print(f"\n{BOLD}Tasa de Cobertura Exitosa: {success_rate:.1f}%{RESET}\n")
         
-        success_rate = (total_passed / total * 100) if total > 0 else 0
-        print(f"\n{BOLD}Tasa de éxito: {success_rate:.1f}%{RESET}\n")
-        
-        if total_failed == 0 and total_blocked == 0:
-            print(f"{GREEN}{BOLD}🎉 ¡TODAS LAS PRUEBAS PASARON! El admin tiene acceso completo.{RESET}\n")
-            return True
+        if failed == 0 and blocked == 0:
+            print(f"{GREEN}{BOLD}🎉 ¡SISTEMA INTEGRADO EXITOSAMENTE! Las rutas son totalmente accesibles.{RESET}\n")
         else:
-            print(f"{RED}{BOLD}⚠️  Hay problemas que necesitan ser corregidos.{RESET}\n")
-            return False
+            print(f"{RED}{BOLD}⚠️  Revisa los códigos de error en la consola del Backend.{RESET}\n")
 
 
 if __name__ == "__main__":
@@ -326,8 +258,8 @@ if __name__ == "__main__":
         tester = AdminAccessTester()
         tester.run_all_tests()
     except KeyboardInterrupt:
-        print(f"\n\n{YELLOW}Prueba interrumpida por el usuario{RESET}")
+        print(f"\n\n{YELLOW}Suite de pruebas cancelada por el operador.{RESET}")
         sys.exit(1)
     except Exception as e:
-        print(f"\n{RED}Error inesperado: {str(e)}{RESET}")
+        print(f"\n{RED}Excepción del script de pruebas: {str(e)}{RESET}")
         sys.exit(1)

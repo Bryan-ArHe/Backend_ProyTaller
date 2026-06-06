@@ -186,6 +186,8 @@ app.include_router(zona_cobertura.router)
 app.include_router(solicitudes.router)
 
 
+
+
 # Endpoint raíz para verificar que la API está activa
 @app.get("/", tags=["Health Check"])
 def root():

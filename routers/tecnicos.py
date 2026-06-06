@@ -37,6 +37,6 @@ def listar_tecnicos_libres(
 ):
     tecnicos_libres = db.query(Tecnico).join(Taller).filter(
         Taller.id_gestor == id_gestor, 
-        Tecnico.disponible == "Libre"
+        Tecnico.disponibilidad == "Libre"
     ).all()
     return [mapear_tecnico_a_dict(t) for t in tecnicos_libres]
