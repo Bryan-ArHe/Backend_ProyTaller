@@ -22,6 +22,7 @@ class Vehiculo(Base):
         placa: Placa de registro único del vehículo
         marca: Marca del vehículo
         modelo: Modelo del vehículo
+        tipo: Tipo de vehículo
         color: Color del vehículo
         anio: Año de fabricación del vehículo
         fecha_registro: Fecha de registro en el sistema
@@ -29,23 +30,18 @@ class Vehiculo(Base):
     __tablename__ = "vehiculo"
     
     id_vehiculo = Column(Integer, primary_key=True, index=True)
-    id_usuario = Column(Integer, ForeignKey("usuario.id_usuario", ondelete="CASCADE"), nullable=False, index=True)
+    id_cliente = Column(Integer, ForeignKey("cliente.id_cliente", ondelete="CASCADE"), nullable=False, index=True)
     
     placa = Column(String(15), unique=True, nullable=False, index=True)
     marca = Column(String(60), nullable=False)
     modelo = Column(String(80), nullable=False)
+    tipo = Column(String(50), nullable=True)  # 'Automóvil', 'Motocicleta', 'Camión', etc.
     color = Column(String(30), nullable=True)
     anio = Column(Integer, nullable=True)
     
     fecha_registro = Column(DateTime, default=datetime.utcnow, nullable=False)
     
     # Relaciones
-    usuario = relationship("models.user.Usuario", foreign_keys=[id_usuario])
-    incidentes = relationship("models.incidente.Incidente", back_populates="vehiculo", cascade="all, delete-orphan")
+    cliente = relationship("Cliente", back_populates="vehiculos")
+    incidentes = relationship("Incidente", back_populates="vehiculo", cascade="all")
     
-    def __repr__(self):
-        return f"<Vehiculo(id={self.id_vehiculo}, placa='{self.placa}', usuario_id={self.id_usuario})>"
-
-
-# Importar al final para resolver relaciones sin circular imports
-from models.incidente import Incidente  # noqa: E402, F401

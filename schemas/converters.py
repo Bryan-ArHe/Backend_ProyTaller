@@ -1,6 +1,3 @@
-"""
-schemas/converters.py - Funciones auxiliares para convertir ORM a dataclasses
-"""
 
 from dataclasses import is_dataclass, fields, asdict
 from sqlalchemy.inspection import inspect as sqlalchemy_inspect

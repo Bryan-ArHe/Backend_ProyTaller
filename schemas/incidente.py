@@ -1,90 +1,16 @@
-"""
-schemas/incidente.py - Esquemas Pydantic V2 para CRUD de Incidentes
-Validación y serialización para Incidentes y Evidencia Multimedia
-"""
-
-from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, List
+from pydantic import BaseModel
 from datetime import datetime
+from typing import Optional
 
+class IncidenteBase(BaseModel):
+    descripcion: str
+    ubicacion_inicial_wkt: str # Recibimos/enviamos texto plano WKT para interactuar con PostGIS
 
-# ============================================================================
-# ESQUEMAS PARA EVIDENCIA
-# ============================================================================
+class IncidenteCreate(IncidenteBase):
+    id_cliente: int
 
-class EvidenciaCreate(BaseModel):
-    """Esquema para capturar una evidencia en el reporte de incidente"""
-    tipo: str = Field(..., min_length=1, max_length=50)
-    url: str = Field(..., min_length=5, max_length=500)
-    tamano_bytes: Optional[int] = Field(None, gt=0)
-    descripcion: Optional[str] = Field(None, max_length=300)
-
-
-class EvidenciaResponse(BaseModel):
-    """Esquema de respuesta para Evidencia"""
-    id_evidencia: int
+class IncidenteSimpleResponse(IncidenteBase):
     id_incidente: int
-    tipo: str
-    url: str
-    tamano_bytes: Optional[int]
-    descripcion: Optional[str]
-    fecha_captura: datetime
-    fecha_registro: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-# ============================================================================
-# ESQUEMAS PARA INCIDENTE
-# ============================================================================
-
-class IncidenteCreate(BaseModel):
-    """
-    Esquema para reporte inicial de incidente
-    Incluye datos del incidente y lista de evidencias
-    """
-    id_vehiculo: int = Field(..., gt=0)
-    descripcion: str = Field(..., min_length=10, max_length=1000)
-    ubicacion_lat: Optional[float] = Field(None, ge=-90, le=90)
-    ubicacion_long: Optional[float] = Field(None, ge=-180, le=180)
-    evidencias: List[EvidenciaCreate] = Field(default_factory=list)
-
-
-class IncidenteResponse(BaseModel):
-    id_incidente: int
-    id_vehiculo: Optional[int] = None
-    id_usuario: Optional[int] = None
-    descripcion: Optional[str] = None 
-    estado_incidente: str 
-    prioridad: str
-    latitud: Optional[float] = None
-    longitud: Optional[float] = None 
+    id_cliente: int
+    estado_incidente: str
     fecha_incidente: datetime
-    model_config = ConfigDict(from_attributes=True)
-
-
-class IncidenteDetailedResponse(IncidenteResponse):
-    """
-    Incidente con información completa incluyendo:
-    - Datos del vehículo involucrado
-    - Información del cliente
-    - Lista completa de evidencias
-    """
-    evidencias: List[EvidenciaResponse] = Field(default_factory=list)
-
-
-class IncidenteListResponse(BaseModel):
-    total: int
-    incidentes: List[IncidenteResponse] # <-- Que use el esquema corregido de arriba
-    model_config = ConfigDict(from_attributes=True)
-
-
-class TriajeAIResponse(BaseModel):
-    """Esquema para la respuesta del análisis de IA"""
-    nivel_prioridad: str
-    diagnostico_presuntivo: str
-    recomendaciones: List[str]
-    taller_sugerido_id: Optional[int] = None
-
-    # Esto es vital para que FastAPI pueda leer objetos de la DB
-    model_config = ConfigDict(from_attributes=True)

@@ -56,8 +56,8 @@ class Usuario(Base):
     bitacoras = relationship("Bitacora", back_populates="usuario", cascade="all, delete-orphan")
     
     # --- RELACIONES DE HERENCIA 1:1 (Sincronizadas con uselist=False) ---
-    tecnico = relationship("Tecnico", back_populates="usuario", uselist=False)
     cliente = relationship("Cliente", back_populates="usuario", uselist=False)
+    tecnico = relationship("Tecnico", back_populates="usuario", uselist=False)
     gestor_taller = relationship("GestorTaller", back_populates="usuario", uselist=False)
 
     def __repr__(self):

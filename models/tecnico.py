@@ -11,10 +11,10 @@ class Tecnico(Base):
     # La PK es directamente el ID del usuario del cual hereda. Se elimina el id_usuario redundante.
     id_tecnico = Column(Integer, ForeignKey("usuario.id_usuario", ondelete="CASCADE"), primary_key=True, index=True)
     id_taller = Column(Integer, ForeignKey("taller.id_taller", ondelete="RESTRICT"), nullable=True, index=True)
-    
+    id_gestor = Column(Integer, ForeignKey("gestor_taller.id_gestor", ondelete="RESTRICT"), nullable=True, index=True)
     # Campos operativos (Normalizados: nombres y apellidos viven en la tabla usuario)
     especialidad = Column(String(100), nullable=True)
-    estado_disponibilidad = Column(String, default="Libre")  # 'Libre', 'Ocupado', 'Inactivo'
+    disponibilidad = Column(String, default="Libre")  # 'Libre', 'Ocupado', 'Inactivo'
     
     # Rastreo geográfico operativo para el despacho de emergencias
     latitud_actual = Column(Float, nullable=True)
@@ -29,8 +29,25 @@ class Tecnico(Base):
     # CORRECCIÓN DE CRUCE: Sincronizado con property 'tecnicos' definida en models/taller.py
     taller = relationship("Taller", back_populates="tecnicos")
     
+    # CORRECCIÓN DE CRUCE: Sincronizado con property 'tecnicos' definida en models/gestor.py
+    gestor = relationship("GestorTaller", back_populates="tecnicos")
+    
+    # Relaciones operativas
+    asignaciones = relationship(
+        "IncidenteAsignado",
+        back_populates="tecnico",
+    )
     # Sincronizado con property 'tecnico' en models/solicitud.py
-    solicitudes_servicio = relationship("SolicitudServicio", back_populates="tecnico")
+    solicitudes_servicio = relationship(
+        "SolicitudServicio",
+        back_populates="tecnico"
+    )
+
+    tracking_ubicaciones = relationship(
+        "TrackingUbicacion",
+        back_populates="tecnico",
+        cascade="all, delete-orphan"
+    )
 
     def __repr__(self):
         return f"<Tecnico(id={self.id_tecnico}, especialidad='{self.especialidad}', estado='{self.estado_disponibilidad}')>"

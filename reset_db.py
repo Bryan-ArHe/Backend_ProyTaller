@@ -154,7 +154,7 @@ def create_test_data():
             id_tecnico=u_tecnico.id_usuario,
             id_taller=taller_central.id_taller,
             especialidad='Mecánica y Sistemas de Inyección',
-            estado_disponibilidad='Libre'  # Sincronizado con el string por defecto del modelo
+            disponibilidad='Libre'  # Sincronizado con el string por defecto del modelo
         )
         db.add(perfil_tecnico)
         db.commit()

@@ -47,13 +47,15 @@ class AdminAccessTester:
         """1. Prueba login del admin"""
         print(f"\n{BOLD}1️⃣  PROBANDO LOGIN DEL ADMIN{RESET}")
         try:
-            data = {
+            # OAuth2PasswordBearer estándar requiere los campos 'username' y 'password'
+            form_data = {
                 "username": ADMIN_EMAIL,
                 "password": ADMIN_PASSWORD
             }
+            # Cambiamos data=form_data para enviarlo como application/x-www-form-urlencoded
             response = self.session.post(
                 f"{BASE_URL}/auth/login",
-                data=data
+                data=form_data
             )
             
             if response.status_code == 200:
@@ -153,24 +155,21 @@ class AdminAccessTester:
         print(f"\n{BOLD}4️⃣  PROBANDO MÓDULO: TALLERES{RESET}")
         results = []
         
-        # GET /talleres (listar)
-        results.append(self.test_endpoint("GET", "/talleres", 
-                                         description="(Listar talleres)"))
+        # GET /talleres (listar - filtrará automáticamente por el ID del Admin/Gestor)
+        results.append(self.test_endpoint("GET", "/talleres/", description="(Listar talleres del tenant)"))
         
-        # POST /talleres (crear)
+        # POST /talleres (crear - quitamos id_propietario ya que se resuelve vía software en FastAPI)
         new_taller = {
-            "nombre": "Test Taller",
-            "direccion": "Cra 7 #50-10",
-            "telefono": "555-1234",
-            "id_propietario": 1,
-            "activo": True
+            "nombre": "Sucursal Norte Express",
+            "direccion": "Av. Banzer entre 4to y 5to Anillo",
+            "ubicacion_wkt": "POINT(-63.1720 -17.7634)"  # Formato PostGIS
         }
-        results.append(self.test_endpoint("POST", "/talleres", [201], new_taller, 
-                                         "(Crear taller)"))
+        results.append(self.test_endpoint("POST", "/talleres/", [201], new_taller, 
+                                          "(Crear taller con geometría WKT)"))
         
-        # GET /talleres/1 (obtener taller)
+        # GET /talleres/1 (obtener taller detallado)
         results.append(self.test_endpoint("GET", "/talleres/1", 
-                                         description="(Obtener taller)"))
+                                          description="(Obtener taller y su lista de técnicos)"))
         
         return all(results)
     
@@ -205,9 +204,18 @@ class AdminAccessTester:
         print(f"\n{BOLD}7️⃣  PROBANDO MÓDULO: INCIDENTES{RESET}")
         results = []
         
-        # GET /incidentes (listar)
-        results.append(self.test_endpoint("GET", "/incidentes", 
-                                         description="(Listar incidentes)"))
+        # GET /incidentes (listar incidentes activos)
+        results.append(self.test_endpoint("GET", "/incidentes/", 
+                                          description="(Listar incidentes activos en el sistema)"))
+        
+        # POST /incidentes/ (reportar nuevo incidente usando PostGIS)
+        new_incidente = {
+            "id_cliente": 1, # ID sembrado en tu reset_db.py
+            "descripcion": "Auxilio: Motor sobrecalentado en Av. Las Américas",
+            "ubicacion": "POINT(-63.1812 -17.7924)"
+        }
+        results.append(self.test_endpoint("POST", "/incidentes/", [201], new_incidente,
+                                          "(Reportar incidente espacial PostGIS)"))
         
         return all(results)
     

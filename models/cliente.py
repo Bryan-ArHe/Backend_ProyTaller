@@ -13,5 +13,7 @@ class Cliente(Base):
 
     # Relación con Usuario
     usuario = relationship("Usuario", back_populates="cliente", uselist=False)
+    # Relación con Vehículo
+    vehiculos = relationship("Vehiculo", back_populates="cliente", cascade="all, delete-orphan")
     # Relación con Incidente
     incidentes = relationship("Incidente", back_populates="cliente", cascade="all, delete-orphan")

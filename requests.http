@@ -21,7 +21,7 @@ POST {{baseUrl}}/auth/seed-test-users
 ###   "usuarios": [
 ###     {
 ###       "email": "admin@example.com",
-###       "password": "TestPassword123!",
+###       "password": "12345678!",
 ###       "telefono": "3001111111",
 ###       "id_rol": 1,
 ###       "rol_nombre": "admin",
@@ -246,72 +246,25 @@ DELETE {{baseUrl}}/vehiculos/1
 Authorization: Bearer {{token}}
 
 
-### ==================== REPORTE DE INCIDENTES ====================
+### ==================== REPORTE DE INCIDENTES (POSTGIS ESPACIAL) ====================
 
-### 1. Reportar un nuevo incidente/emergencia
-POST {{baseUrl}}/incidentes/reportar
+### 1. Reportar un nuevo incidente/emergencia usando formato WKT
+POST {{baseUrl}}/incidentes/
 Content-Type: {{contentType}}
 Authorization: Bearer {{token}}
 
 {
-  "id_vehiculo": 1,
-  "descripcion": "Choque frontal en Cra. 7 con calle 93. Dos vehículos involucrados. Daño significativo en el frente.",
-  "ubicacion_lat": 4.72,
-  "ubicacion_long": -74.01,
-  "evidencias": [
-    {
-      "tipo": "FOTO",
-      "url": "https://storage.example.com/incidente_001_foto1.jpg",
-      "tamano_bytes": 2048576,
-      "descripcion": "Vista frontal del daño"
-    },
-    {
-      "tipo": "VIDEO",
-      "url": "https://storage.example.com/incidente_001_video.mp4",
-      "tamano_bytes": 10485760,
-      "descripcion": "Video del lugar del incidente"
-    }
-  ]
+  "id_cliente": 2,
+  "descripcion": "Vehículo con fallas mecánicas en el alternador cerca del Campus Universitario UAGRM.",
+  "tipo_vehiculo": "Automóvil",
+  "placa": "3829-LKN",
+  "ubicacion_inicial_wkt": "POINT(-63.1670 -17.7761)"
 }
 
 
-### 2. Listar mis incidentes reportados
-GET {{baseUrl}}/incidentes
+### 2. Listar incidentes activos (Retorna coordenadas transformadas a texto mediante ST_AsText)
+GET {{baseUrl}}/incidentes/
 Authorization: Bearer {{token}}
-
-
-### 3. Obtener detalles de un incidente específico
-GET {{baseUrl}}/incidentes/1
-Authorization: Bearer {{token}}
-
-
-### 4. Agregar evidencia a un incidente existente
-POST {{baseUrl}}/incidentes/1/evidencias
-Content-Type: {{contentType}}
-Authorization: Bearer {{token}}
-
-{
-  "tipo": "FOTO",
-  "url": "https://storage.example.com/incidente_001_foto_adicional.jpg",
-  "tamano_bytes": 1536000,
-  "descripcion": "Daño lateral del vehículo"
-}
-
-
-### 5. Obtener todas las evidencias de un incidente
-GET {{baseUrl}}/incidentes/1/evidencias
-Authorization: Bearer {{token}}
-
-
-### 6. Eliminar una evidencia
-DELETE {{baseUrl}}/incidentes/1/evidencias/1
-Authorization: Bearer {{token}}
-
-
-### 7. Calcular prioridad de forma previa (preview)
-GET {{baseUrl}}/incidentes/triaje/calcular-prioridad?descripcion=Choque frontal&ubicacion_lat=4.72&ubicacion_long=-74.01
-Authorization: Bearer {{token}}
-
 
 ### ==================== FILTROS Y BÚSQUEDA (OPERADORES) ====================
 
@@ -344,4 +297,40 @@ Authorization: Bearer {{token}}
 
 ### 3. Obtener resumen estadístico (requiere admin)
 GET {{baseUrl}}/incidentes/stats/resumen
+Authorization: Bearer {{token}}
+
+### ==================== GESTIÓN MULTI-TENANT (REQ. GESTOR DE TALLER) ====================
+
+### 1. Listar los talleres pertenecientes al Tenant del Gestor autenticado
+### (El aislamiento se resuelve mediante .join(Taller).filter(Taller.id_gestor == id_gestor))
+GET {{baseUrl}}/talleres/
+Authorization: Bearer {{token}}
+
+
+### 2. Obtener el detalle compuesto de un taller específico (Incluye su lista de técnicos)
+GET {{baseUrl}}/talleres/1
+Authorization: Bearer {{token}}
+
+
+### 3. Registrar un nuevo técnico en un taller (Aplica patrón de herencia 1:1 en cascada)
+POST {{baseUrl}}/tecnicos/
+Content-Type: {{contentType}}
+Authorization: Bearer {{token}}
+
+{
+  "id_taller": 1,
+  "especialidad": "Electricidad y Escáner Automotriz",
+  "disponible": true,
+  "usuario": {
+    "email": "tecnico_electrico@taller.com",
+    "nombre": "Carlos",
+    "apellido": "Mendoza",
+    "telefono": "78099122",
+    "is_active": true
+  }
+}
+
+
+### 4. Listar todos los técnicos del Tenant corporativo (Respuesta plana sin ConnectionResetError)
+GET {{baseUrl}}/tecnicos/
 Authorization: Bearer {{token}}

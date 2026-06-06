@@ -1,81 +1,88 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List
+from sqlalchemy import func
+from models.taller import Taller
+from schemas.taller import TallerSimpleResponse, TallerCreate
+from dependencies import get_db
+from auth.dependencies import get_current_gestor_id
 
-# Importamos la dependencia para conectarnos a la base de datos
-from models.database import get_db 
-from auth.dependencies import get_current_user, require_admin
-from models.user import Usuario
+router = APIRouter(prefix="/talleres", tags=["Talleres"])
 
-# Importamos nuestras operaciones y contratos
-from crud import taller as crud_taller
-from schemas.taller import TallerCreate, TallerUpdate, TallerResponse
-
-# Creamos el enrutador. 
-# prefix="/talleres" significa que todas estas rutas empezarán con esa URL.
-router = APIRouter(
-    prefix="/talleres",
-    tags=["Gestión de Talleres"],
-    dependencies=[Depends(get_current_user)]  # Todos los endpoints requieren autenticación
-)
-
-# --- POST: Registrar un nuevo taller ---
-@router.post("/", response_model=TallerResponse, status_code=status.HTTP_201_CREATED)
-def create_taller(
-    taller: TallerCreate, 
-    current_user: Usuario = Depends(require_admin),
-    db: Session = Depends(get_db)
+@router.get("/", response_model=list[TallerSimpleResponse])
+def listar_talleres_por_tenant(
+    db: Session = Depends(get_db),
+    id_gestor: int = Depends(get_current_gestor_id)
 ):
-    """Recibe los datos de Angular, los valida y crea el taller. SOLO ADMIN."""
-    return crud_taller.create_taller(db=db, taller=taller)
+    # Solicitamos columnas primitivas de forma explícita
+    talleres_db = db.query(
+        Taller.id_taller,
+        Taller.id_gestor,
+        Taller.nombre,
+        Taller.direccion,
+        func.ST_AsText(Taller.ubicacion).label("ubicacion_wkt")
+    ).filter(Taller.id_gestor == id_gestor).all()
+    
+    # Construimos un mapeo de diccionarios planos. 
+    # Al no haber objetos intermedios de SQLAlchemy, Pydantic lo serializa al instante.
+    return [
+        {
+            "id_taller": t[0],
+            "id_gestor": t[1],
+            "nombre": t[2],
+            "direccion": t[3],
+            "ubicacion_wkt": t[5]
+        } for t in talleres_db
+    ]
 
-# --- GET: Listar todos los talleres activos ---
-@router.get("/", response_model=List[TallerResponse])
-def read_talleres(
-    skip: int = 0, 
-    limit: int = 100, 
-    current_user: Usuario = Depends(get_current_user),
-    db: Session = Depends(get_db)
+@router.post("/", response_model=TallerSimpleResponse, status_code=201)
+def crear_taller_espacial(
+    payload: TallerCreate,
+    db: Session = Depends(get_db),
+    id_gestor: int = Depends(get_current_gestor_id)
 ):
-    """Devuelve la lista de talleres. Útil para la tabla en Angular."""
-    return crud_taller.get_talleres(db, skip=skip, limit=limit)
+    try:
+        nuevo_taller = Taller(
+            id_gestor=id_gestor,
+            nombre=payload.nombre,
+            direccion=payload.direccion,
+            ubicacion=func.ST_GeomFromText(payload.ubicacion_wkt, 4326) if payload.ubicacion_wkt else None
+        )
+        db.add(nuevo_taller)
+        db.commit()
+        db.refresh(nuevo_taller)
+        
+        return {
+            "id_taller": nuevo_taller.id_taller,
+            "id_gestor": nuevo_taller.id_gestor,
+            "nombre": nuevo_taller.nombre,
+            "direccion": nuevo_taller.direccion,
+            "ubicacion_wkt": payload.ubicacion_wkt
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=f"Error al guardar taller: {str(e)}")
 
-# --- GET: Obtener un solo taller por su ID ---
-@router.get("/{taller_id}", response_model=TallerResponse)
-def read_taller(
-    taller_id: int, 
-    current_user: Usuario = Depends(get_current_user),
-    db: Session = Depends(get_db)
+@router.get("/{id_taller}", response_model=TallerSimpleResponse)
+def obtener_detalle_taller(
+    id_taller: int,
+    db: Session = Depends(get_db),
+    id_gestor: int = Depends(get_current_gestor_id)
 ):
-    """Busca los detalles de un taller específico."""
-    db_taller = crud_taller.get_taller(db, taller_id=taller_id)
-    if db_taller is None:
-        raise HTTPException(status_code=404, detail="Taller no encontrado")
-    return db_taller
-
-# --- PUT: Actualizar un taller ---
-@router.put("/{taller_id}", response_model=TallerResponse)
-def update_taller(
-    taller_id: int, 
-    taller: TallerUpdate, 
-    current_user: Usuario = Depends(require_admin),
-    db: Session = Depends(get_db)
-):
-    """Sobreescribe los datos permitidos de un taller. SOLO ADMIN."""
-    db_taller = crud_taller.update_taller(db, taller_id=taller_id, taller_data=taller)
-    if db_taller is None:
-        raise HTTPException(status_code=404, detail="Taller no encontrado")
-    return db_taller
-
-# --- DELETE: Desactivar un taller (Borrado Lógico) ---
-@router.delete("/{taller_id}", response_model=TallerResponse)
-def delete_taller(
-    taller_id: int, 
-    current_user: Usuario = Depends(require_admin),
-    db: Session = Depends(get_db)
-):
-    """Desactiva el taller para que no reciba más incidentes. SOLO ADMIN."""
-    db_taller = crud_taller.delete_taller(db, taller_id=taller_id)
-    if db_taller is None:
-        raise HTTPException(status_code=404, detail="Taller no encontrado")
-    return db_taller
+    taller_db = db.query(
+        Taller.id_taller,
+        Taller.id_gestor,
+        Taller.nombre,
+        Taller.direccion,
+        func.ST_AsText(Taller.ubicacion).label("ubicacion_wkt")
+    ).filter(Taller.id_taller == id_taller, Taller.id_gestor == id_gestor).first()
+    
+    if not taller_db:
+        raise HTTPException(status_code=404, detail="Taller no encontrado o acceso no autorizado")
+        
+    return {
+        "id_taller": taller_db.id_taller,
+        "id_gestor": taller_db.id_gestor,
+        "nombre": taller_db.nombre,
+        "direccion": taller_db.direccion,
+        "ubicacion_wkt": taller_db.ubicacion_wkt
+    }

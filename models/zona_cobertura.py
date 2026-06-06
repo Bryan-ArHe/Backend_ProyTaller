@@ -1,13 +1,17 @@
-from sqlalchemy import Column, Integer, String, Boolean
+from sqlalchemy import Column, ForeignKey, Integer, Numeric, String, Boolean
 from geoalchemy2 import Geometry
+from sqlalchemy.orm import relationship
 from models.database import Base
 
 class ZonaCobertura(Base):
     __tablename__ = 'zonas_cobertura'
     
-    id = Column(Integer, primary_key=True, index=True)
-    nombre = Column(String, nullable=False)
-    descripcion = Column(String)
-    estado = Column(Boolean, default=True)
-    # Especificamos geometry_type y srid=4326 (que es el estándar GPS para latitud/longitud)
-    poligono_area = Column(Geometry(geometry_type='POLYGON', srid=4326), nullable=False)
+    id_zona = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    id_taller = Column(Integer, ForeignKey("taller.id_taller", ondelete="CASCADE"), nullable=False)
+    nombre_zona = Column(String(100), nullable=False)
+    tarifa_desplazamiento = Column(Numeric(10, 2), nullable=False)
+
+    # El polígono que define el área de cobertura de esta zona
+    poligono_area = Column(Geometry("POLYGON", srid=4326), nullable=False)
+    
+    taller = relationship("Taller", back_populates="zona_cobertura")
