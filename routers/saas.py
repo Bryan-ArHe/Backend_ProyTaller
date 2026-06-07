@@ -52,6 +52,9 @@ def modificar_o_crear_suscripcion_empresa(
         suscripcion.fecha_inicio = ahora_renovacion  # 🌟 Seteamos la fecha del cambio
         suscripcion.fecha_fin = nueva_expiracion      # 🌟 Extendemos el contrato 30 días más
         message = "Plan SaaS y cuotas de almacenamiento actualizados con éxito"
+
+        db.add(suscripcion)
+        message += "Plan SaaS y estado actualizados con éxito"
     
     db.commit()
     db.refresh(suscripcion)

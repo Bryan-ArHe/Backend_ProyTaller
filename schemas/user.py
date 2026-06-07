@@ -28,6 +28,28 @@ class RolConPermisosResponse(RolResponse):
     """Esquema detallado de Rol con sus permisos anidados [cite: 13]"""
     permisos: List[PermisoResponse] = []
 
+
+# --- SCHEMAS DE SUSCRIPCIÓN SaaS ---
+
+class PlanSaasResponse(BaseModel):
+    id_plan: int
+    nombre_plan: str
+    precio: Optional[float] = 0.0
+
+    class Config:
+        from_attributes = True  # Permite leer objetos de SQLAlchemy (ORM)
+
+class SuscripcionTallerResponse(BaseModel):
+    id_suscripcion: int
+    id_plan: int
+    fecha_inicio: datetime
+    fecha_fin: datetime
+    estado_suscripcion: str
+    plan: Optional[PlanSaasResponse] = None
+
+    class Config:
+        from_attributes = True
+
 # --- SCHEMAS DE USUARIO ---
 
 class UsuarioCreate(BaseModel):
@@ -50,7 +72,8 @@ class UsuarioResponse(BaseModel):
     id_rol: int
     fecha_registro: datetime
     rol: RolResponse # Relación 1-a-1
-    
+    suscripciones: List[SuscripcionTallerResponse] = []
+
     model_config = ConfigDict(from_attributes=True)
 
 class UsuarioUpdate(BaseModel):

@@ -6,7 +6,7 @@ Módulo 1: Identidad y Accesos - Endpoints para CRUD de usuarios y perfiles
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session, joinedload
 from models.database import get_db
-from models.user import Usuario, Rol, EstadoCuenta
+from models.user import SuscripcionTaller, Usuario, Rol, EstadoCuenta
 from schemas.user import (
     UsuarioResponse,
     UsuarioUpdate,
@@ -118,7 +118,10 @@ def listar_usuarios(
         )
         
     # Tu lógica existente para consultar los usuarios en la BD...
-    usuarios = db.query(Usuario).all()
+    usuarios = db.query(Usuario).options(
+        joinedload(Usuario.rol),
+        joinedload(Usuario.suscripciones).joinedload(SuscripcionTaller.plan)
+    ).all()
     return usuarios
 
 @router.patch("/{usuario_id}/estado", response_model=UsuarioResponse)

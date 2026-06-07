@@ -59,7 +59,7 @@ class Usuario(Base):
     cliente = relationship("Cliente", back_populates="usuario", uselist=False)
     tecnico = relationship("Tecnico", back_populates="usuario", uselist=False)
     gestor_taller = relationship("GestorTaller", back_populates="usuario", uselist=False)
-    suscripciones = relationship("SuscripcionTaller", back_populates="administrador")
+    suscripciones = relationship("SuscripcionTaller", back_populates="superAdministrador")
 
     def __repr__(self):
         return f"<Usuario(email='{self.email}', rol='{self.id_rol}')>"
@@ -92,4 +92,4 @@ class SuscripcionTaller(Base):
 
     # Relaciones anidadas
     plan = relationship("PlanSaas", back_populates="suscripciones")
-    administrador = relationship("Usuario", back_populates="suscripciones")
+    superAdministrador = relationship("Usuario", back_populates="suscripciones")
