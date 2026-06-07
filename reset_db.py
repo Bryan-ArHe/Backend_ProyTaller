@@ -6,12 +6,14 @@ Uso: python reset_db.py
 """
 import sys
 import hashlib
+import traceback
 from sqlalchemy import text, func
 from models.database import SessionLocal, engine, Base
+from datetime import datetime, timedelta
 
 # === IMPORTACIONES OBLIGATORIAS ===
 import models  
-from models.user import Rol, Permiso, Usuario, EstadoCuenta
+from models.user import Rol, Permiso, Usuario, EstadoCuenta, PlanSaas, SuscripcionTaller
 from models.taller import Taller
 from models.tecnico import Tecnico
 from models.incidente import Incidente
@@ -35,15 +37,13 @@ def reset_database():
     """Elimina y recrea todas las tablas (optimizado para PostgreSQL)"""
     print('🗑️  Eliminando todas las tablas y limpiando esquema...')
     
-    with engine.connect() as conn:
+    with engine.begin() as conn:
         try:
             print('   - Eliminando schema public (y todos sus objetos)...')
             conn.execute(text("DROP SCHEMA public CASCADE;"))
-            conn.commit()
             print('   ✓ Schema eliminado')
         except Exception as e:
             print(f'   ⚠️  Schema no existía o error: {e}')
-            conn.rollback()
         
         try:
             print('   - Creando schema public...')
@@ -51,15 +51,12 @@ def reset_database():
             print('   - Asignando permisos...')
             conn.execute(text("GRANT ALL ON SCHEMA public TO postgres;"))
             conn.execute(text("GRANT ALL ON SCHEMA public TO public;"))
-            conn.commit()
             
             print('   - Asegurando extensión PostGIS...')
             conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis;"))
-            conn.commit()
             print('   ✓ Schema recreado con permisos y PostGIS')
         except Exception as e:
             print(f'   ⚠️  Error recreando schema o postgis: {e}')
-            conn.rollback()
     
     print('🏗️  Creando nuevas tablas desde los modelos...')
     Base.metadata.create_all(bind=engine)
@@ -72,10 +69,11 @@ def create_test_data():
     try:
         print('\n📋 CREANDO ROLES BASE (RBAC)...')
         roles_data = [
-            Rol(nombre='Administrador', descripcion='Administrador del sistema con acceso completo'),
-            Rol(nombre='Tecnico', descripcion='Técnico de taller para atención de emergencias'),
-            Rol(nombre='Cliente', descripcion='Cliente/Usuario final para reportar incidentes'),
-            Rol(nombre='Gestor', descripcion='Gestor de taller para administrar recursos'),
+            Rol(nombre='superAdmin', descripcion='Proveedor de la plataforma Saas, gestiona empresas y planes'),
+            Rol(nombre='Administrador', descripcion='Dueño de la franquicia/empresa, ve toda su red de talleres'),
+            Rol(nombre='Gestor', descripcion='Gerente operativo de una sucursal/taller específico'),
+            Rol(nombre='Tecnico', descripcion='Técnico de campo para atención de emergencias'),
+            Rol(nombre='Cliente', descripcion='Usuario final que solicita auxilio mecánico')
         ]
         for r in roles_data:
             db.add(r)
@@ -83,10 +81,61 @@ def create_test_data():
         print(f'   ✓ {len(roles_data)} roles creados')
         
         # Mapeo de objetos de roles para asignaciones posteriores
+        superAdmin_rol = next(r for r in roles_data if r.nombre == 'superAdmin')
         admin_rol = next(r for r in roles_data if r.nombre == 'Administrador')
+        gestor_rol = next(r for r in roles_data if r.nombre == 'Gestor')
         tecnico_rol = next(r for r in roles_data if r.nombre == 'Tecnico')
         cliente_rol = next(r for r in roles_data if r.nombre == 'Cliente')
-        gestor_rol = next(r for r in roles_data if r.nombre == 'Gestor')
+
+        print('\n🚀 CREANDO PLANES SAAS...')
+        planes_data = [
+            PlanSaas(nombre_plan='Plan Basico', precio_mensual=49.99, limite_talleres=1, limite_tecnicos=3),
+            PlanSaas(nombre_plan='Plan Premium', precio_mensual=99.99, limite_talleres=5, limite_tecnicos=15),
+            PlanSaas(nombre_plan='Plan Corporativo', precio_mensual=199.99, limite_talleres=20, limite_tecnicos=100)
+        ]
+        for p in planes_data:
+            db.add(p)
+        db.flush()
+        print(f'   ✓ {len(planes_data)} planes Saas creados')
+    
+        plan_premium = next(p for p in planes_data if p.nombre_plan == 'Plan Premium')
+
+        print('\n👤 CREANDO USUARIOS RAÍZ Y DUEÑO CORPORATIVO...')
+        # 1. Crear el usuario del proveedor del software (SaaS Core)
+        sadmin_user = Usuario(
+            nombre="Carlos",
+            apellido="SuperAdmin",
+            email="superadmin@saas.com",
+            telefono="77777777",
+            password_hash=hash_seguro_defensivo("superadmin123"),
+            id_rol=superAdmin_rol.id_rol,
+            estado_cuenta=EstadoCuenta.ACTIVO
+        )
+        db.add(sadmin_user)
+        
+        # 2. Crear al Administrador (Dueño de la Franquicia Global de Talleres)
+        u_admin = Usuario(
+            nombre='Bryan', 
+            apellido='Arauz', 
+            email='admin@example.com', 
+            telefono='+1001', 
+            password_hash=hash_seguro_defensivo('12345678'), 
+            id_rol=admin_rol.id_rol, 
+            estado_cuenta=EstadoCuenta.ACTIVO
+        )
+        db.add(u_admin)
+        db.flush()
+
+        print('\n💳 ASIGNANDO SUSCRIPCIÓN ACTIVA AL DUEÑO CORPORATIVO...')
+        suscripcion = SuscripcionTaller(
+            id_usuario_admin=u_admin.id_usuario,
+            id_plan=plan_premium.id_plan,
+            fecha_inicio=datetime.utcnow(),
+            fecha_fin=datetime.utcnow() + timedelta(days=30),
+            estado_suscripcion="Activo"
+        )
+        db.add(suscripcion)
+        db.flush()
         
         print('\n🔐 CREANDO PERMISOS...')
         permisos = [
@@ -115,7 +164,7 @@ def create_test_data():
             Permiso(nombre='eliminar_taller', descripcion='Eliminar taller', recurso='taller', accion='eliminar'),
            
             Permiso(nombre='crear_tecnico', descripcion='Crear nuevo técnico', recurso='tecnico', accion='crear'),
-             Permiso(nombre='leer_tecnico', descripcion='Visualizar todos los técnicos en el sistema', recurso='tecnico', accion='leer'),
+            Permiso(nombre='leer_tecnico', descripcion='Visualizar todos los técnicos en el sistema', recurso='tecnico', accion='leer'),
             Permiso(nombre='actualizar_tecnico', descripcion='Actualizar información del técnico', recurso='tecnico', accion='actualizar'),
             Permiso(nombre='eliminar_tecnico', descripcion='Eliminar técnico', recurso='tecnico', accion='eliminar'),
         ]
@@ -125,25 +174,13 @@ def create_test_data():
         print(f'   ✓ {len(permisos)} permisos creados')
         
         print('\n👥 ASIGNANDO PERMISOS A ROLES...')
+        superAdmin_rol.permisos = permisos
         admin_rol.permisos = permisos
         tecnico_rol.permisos = [p for p in permisos if p.nombre in ['leer_incidente', 'actualizar_incidente', 'leer_solicitud_servicio', 'actualizar_solicitud_servicio', 'leer_usuario', 'ver_dashboard']]
         cliente_rol.permisos = [p for p in permisos if p.nombre in ['crear_incidente', 'leer_incidente', 'crear_vehiculo', 'leer_vehiculo', 'actualizar_vehiculo', 'leer_solicitud_servicio']]
         gestor_rol.permisos = [p for p in permisos if p.nombre in ['crear_usuario', 'leer_usuario', 'actualizar_usuario', 'crear_solicitud_servicio', 'leer_solicitud_servicio', 'actualizar_solicitud_servicio', 'asignar_tecnico', 'leer_incidente', 'ver_dashboard']]
         db.flush()
         print('   ✓ Permisos asignados a roles')
-        
-        # =====================================================================
-        # 👤 SECCIÓN 1: USUARIO ADMINISTRADOR CENTRAL
-        # =====================================================================
-        print('\n👤 CREANDO CUENTA DE ADMINISTRADOR CENTRAL...')
-        u_admin = Usuario(
-            nombre='Admin', apellido='System', 
-            email='admin@example.com', telefono='+1001', 
-            password_hash=hash_seguro_defensivo('12345678'), 
-            id_rol=admin_rol.id_rol, estado_cuenta=EstadoCuenta.ACTIVO
-        )
-        db.add(u_admin)
-        db.flush()
 
         # =====================================================================
         # 🌍 SECCIÓN 2: TENANT HEMISFERIO NORTE
@@ -254,7 +291,9 @@ def create_test_data():
         print('\n📝 RESUMEN DE LA ARQUITECTURA DISTRIBUIDA:')
         print(f'   - {len(roles_data)} Roles Base del Sistema (RBAC)')
         print(f'   - {len(permisos)} Permisos Estrictos Mapeados')
-        print(f'   - 1 Administrador Central del Sistema')
+        print(f'   - 3 Planes SaaS Disponibles')
+        print(f'   - 1 Proveedor Global (superAdmin)')
+        print(f'   - 1 Administrador Central (Dueño con Suscripción Activa)')
         print(f'   - 2 Gestores de Talleres distribuidos por Hemisferio (Tenants)')
         print(f'   - 4 Establecimientos Físicos con PostGIS Activado')
         print(f'   - 8 Técnicos Operativos distribuidos y aislados')
@@ -262,7 +301,6 @@ def create_test_data():
     except Exception as e:
         db.rollback()
         print(f'\n❌ Error crítico al sembrar datos: {e}')
-        import traceback
         traceback.print_exc()
         raise
     finally:

@@ -1,6 +1,6 @@
 # models/__init__.py
 from models.database import Base
-from models.user import Usuario, Rol, Permiso
+from models.user import Usuario, Rol, Permiso, PlanSaas, SuscripcionTaller
 from models.cliente import Cliente
 from models.bitacora import Bitacora
 from models.solicitud import SolicitudServicio, EstadoSolicitud, MensajeInApp

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Table, Enum
+from sqlalchemy import Column, Float, Integer, String, DateTime, ForeignKey, Table, Enum
 from sqlalchemy.orm import relationship
 from models.database import Base
 import enum
@@ -59,6 +59,37 @@ class Usuario(Base):
     cliente = relationship("Cliente", back_populates="usuario", uselist=False)
     tecnico = relationship("Tecnico", back_populates="usuario", uselist=False)
     gestor_taller = relationship("GestorTaller", back_populates="usuario", uselist=False)
+    suscripciones = relationship("SuscripcionTaller", back_populates="administrador")
 
     def __repr__(self):
         return f"<Usuario(email='{self.email}', rol='{self.id_rol}')>"
+    
+
+class PlanSaas(Base):
+    __tablename__ = "plan_saas"
+
+    id_plan = Column(Integer, primary_key=True, index=True)
+    nombre_plan = Column(String(100), nullable=False, unique=True)
+    precio_mensual = Column(Float, nullable=False)
+    limite_talleres = Column(Integer, nullable=False)
+    limite_tecnicos = Column(Integer, nullable=False)
+
+    # Relación inversa hacia las suscripciones
+    suscripciones = relationship("SuscripcionTaller", back_populates="plan")
+
+
+class SuscripcionTaller(Base):
+    __tablename__ = "suscripcion_taller"
+
+    id_suscripcion = Column(Integer, primary_key=True, index=True)
+    # 🌟 La relación va directo al Administrador (Dueño corporativo)
+    id_usuario_admin = Column(Integer, ForeignKey("usuario.id_usuario", ondelete="CASCADE"), nullable=False)
+    id_plan = Column(Integer, ForeignKey("plan_saas.id_plan"), nullable=False)
+    
+    fecha_inicio = Column(DateTime, default=datetime.utcnow, nullable=False)
+    fecha_fin = Column(DateTime, nullable=False)
+    estado_suscripcion = Column(String(50), default="Activo", nullable=False) # Activo, Vencido, Suspendido
+
+    # Relaciones anidadas
+    plan = relationship("PlanSaas", back_populates="suscripciones")
+    administrador = relationship("Usuario", back_populates="suscripciones")

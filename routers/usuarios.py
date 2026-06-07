@@ -206,7 +206,7 @@ def update_user_rol(
     rol_actual_nombre = current_user.rol.nombre if current_user.rol else ""
     
     # Damos soporte tanto a "Administrador" como a tu variación "Admistrador"
-    if rol_actual_nombre not in ["Administrador", "Admistrador"]:
+    if rol_actual_nombre not in ["Administrador"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Solo administradores pueden cambiar roles de usuarios"

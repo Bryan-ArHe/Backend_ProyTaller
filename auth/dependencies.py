@@ -1,17 +1,15 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload  # 🌟 Importamos joinedload
 from models.database import get_db
 from models.user import Usuario
 from config import get_settings
 
-# Usar la misma configuración que security/jwt_handler.py
 settings = get_settings()
 SECRET_KEY = settings.secret_key
 ALGORITHM = settings.algorithm
 
-# Esto le dice a FastAPI que busque el token en el Header "Authorization"
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
 
@@ -29,13 +27,16 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     except JWTError:
         raise credentials_exception
         
-    user = db.query(Usuario).filter(Usuario.email == email).first()
+    # 🌟 ESTRATEGIA ANTE-ERRORES: Cargamos la relación del Rol en caliente con joinedload
+    user = db.query(Usuario).options(
+        joinedload(Usuario.rol)
+    ).filter(Usuario.email == email).first()
+    
     if user is None:
         raise credentials_exception
         
-    # 🛡️ VALIDACIÓN BLINDADA CONTRA NULOS / ENUMS
     estado = getattr(user, "estado_cuenta", "ACTIVO")
-    if hasattr(estado, "value"):  # Por si es un Enum de SQLAlchemy
+    if hasattr(estado, "value"):  
         estado = estado.value
         
     if estado == "INACTIVO":
@@ -47,14 +48,14 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 def check_permissions(required_role: str):
     """
     Fábrica de dependencias para validar roles de manera blindada.
-    Uso: Depends(check_permissions("Administrador"))
+    Soporta la jerarquía: superAdmin > Administrador > Roles Operativos
     """
     def role_checker(current_user: Usuario = Depends(get_current_user)):
-        # Extraemos el nombre del rol de forma 100% segura
         rol_obj = getattr(current_user, "rol", None)
         rol_nombre = getattr(rol_obj, "nombre", "Cliente") if rol_obj else "Cliente"
 
-        if rol_nombre != required_role and rol_nombre != "Administrador":
+        # 👑 El superAdmin y el Administrador heredan por defecto accesos de visualización
+        if rol_nombre not in [required_role, "Administrador", "superAdmin"]:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"No tienes permisos suficientes. Se requiere rol: {required_role}"
@@ -65,32 +66,33 @@ def check_permissions(required_role: str):
 
 def require_admin(current_user: Usuario = Depends(get_current_user)):
     """
-    Dependencia para asegurar que SOLO admin puede acceder a un endpoint.
+    Asegura que solo roles de jerarquía administrativa (Administrador / superAdmin) entren al endpoint.
     """
     rol_obj = getattr(current_user, "rol", None)
     rol_nombre = getattr(rol_obj, "nombre", "Cliente") if rol_obj else "Cliente"
 
-    if rol_nombre != "Administrador":
+    # 🌟 Añadimos superAdmin al pase autorizado
+    if rol_nombre not in ["Administrador", "superAdmin"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Solo administradores pueden realizar esta acción"
+            detail="Solo personal de administración o la plataforma Saas pueden realizar esta acción"
         )
     return current_user
 
 
 def get_current_gestor_id(current_user: Usuario = Depends(get_current_user)) -> int:
     """
-    Inyecta el ID del gestor validando el rol. Si es Administrador global,
+    Inyecta el ID del gestor validando el rol. Si es Administrador global o superAdmin,
     retorna su propio id_usuario para evitar fallos de aislamiento relacional.
     """
     rol_obj = getattr(current_user, "rol", None)
     rol_nombre = getattr(rol_obj, "nombre", "Cliente") if rol_obj else "Cliente"
     
-    # Soportamos todas las variaciones de nombres comunes en los seeds
-    if rol_nombre != "Gestor" and rol_nombre != "Gestor" and rol_nombre != "Administrador":
+    # Añadimos soporte para evitar que el superAdmin y Admin se queden bloqueados en vistas operativas
+    if rol_nombre not in ["Gestor", "Administrador", "superAdmin"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Acceso denegado. Se requiere el rol de Gestor de Taller."
+            detail="Acceso denegado. Se requiere el rol de Gestor de Taller o jerarquía superior."
         )
         
     return current_user.id_usuario
