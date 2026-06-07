@@ -6,7 +6,7 @@ from models.database import Base, engine
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from config import get_settings
-from routers import auth, dashboard, vehiculos, incidentes, usuarios, roles, bitacora, talleres, tecnicos, zona_cobertura, solicitudes
+from routers import auth, dashboard, vehiculos, incidentes, usuarios, roles, bitacora, talleres, tecnicos, zona_cobertura, solicitudes, saas
 
 
 
@@ -184,6 +184,9 @@ app.include_router(zona_cobertura.router)
 
 # Router de Solicitudes de Servicio - Gestión de órdenes de trabajo y asignaciones
 app.include_router(solicitudes.router)
+
+# Router de Administración SaaS - Gestión de planes y suscripciones (solo superAdmin)
+app.include_router(saas.router)
 
 
 
