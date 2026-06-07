@@ -105,29 +105,21 @@ def get_current_profile(
 
 
 @router.get("/", response_model=List[UsuarioResponse])
-def list_all_users(
-    current_user: UsuarioResponse = Depends(get_current_user),
+def listar_usuarios(
+    request: Request,
     db: Session = Depends(get_db),
+    current_user: UsuarioResponse = Depends(get_current_user)
 ):
-    
-    # Verificar que el usuario actual sea administrador
-    if current_user.rol.nombre != "Administrador":
+    # 🔍 EL CAMBIO AQUÍ: Permitir que tanto el Administrador común como el superAdmin listen usuarios
+    if current_user.rol.nombre not in ["Administrador", "superAdmin"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Solo administradores pueden listar usuarios"
+            detail="Solo administradores o el superAdmin pueden listar usuarios"
         )
-    
-    # Obtener todos los usuarios con sus roles cargados
-    usuarios = db.query(Usuario).options(
-        joinedload(Usuario.rol)
-    ).all()
-    
-    # Convertir a UsuarioResponse
-    return [
-        UsuarioResponse.model_validate(usuario)
-        for usuario in usuarios
-    ]
-
+        
+    # Tu lógica existente para consultar los usuarios en la BD...
+    usuarios = db.query(Usuario).all()
+    return usuarios
 
 @router.patch("/{usuario_id}/estado", response_model=UsuarioResponse)
 def update_user_estado(
@@ -273,11 +265,11 @@ def crear_usuario_admin(
     db: Session = Depends(get_db),
 ):
     # Verificar que el usuario actual sea administrador
-    if current_user.rol.nombre != "Administrador":
+    if current_user.rol.nombre not in ["Administrador", "superAdmin"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Solo administradores pueden crear nuevos usuarios"
-        )
+            detail="Solo administradores o superAdmin pueden crear nuevos usuarios"
+    )
     
     # Verificar que el email no esté registrado
     usuario_existente = db.query(Usuario).filter(
