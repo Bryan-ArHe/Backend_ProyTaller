@@ -1,7 +1,7 @@
 ﻿# -*- coding: utf-8 -*-
 """
 reset_db.py - Script optimizado para reiniciar la base de datos y cargar datos de prueba
-Alineado estrictamente con el diseño físico de 27 tablas del 2do Parcial y Multi-tenant.
+Alineado estrictamente con el diseño físico de la Opción B Multi-tenant.
 Uso: python reset_db.py
 """
 import sys
@@ -11,15 +11,19 @@ from sqlalchemy import text, func
 from models.database import SessionLocal, engine, Base
 from datetime import datetime, timedelta
 
-# === IMPORTACIONES OBLIGATORIAS ===
+# === IMPORTACIONES OBLIGATORIAS (ORDENADAS POR JERARQUÍA RELEVANTE) ===
 import models  
+
+# 1. Primero importamos las tablas base del núcleo del sistema (Independientes)
 from models.user import Rol, Permiso, Usuario, EstadoCuenta, PlanSaas, SuscripcionTaller
+
+# 2. Luego importamos los perfiles y tablas extendidas (Dependientes)
+from models.gestor import GestorTaller 
 from models.taller import Taller
 from models.tecnico import Tecnico
 from models.incidente import Incidente
 from models.solicitud import SolicitudServicio
 from models.cliente import Cliente
-from models.gestor import GestorTaller 
 from models.ubicacion_tracking import UbicacionTracking
 from models.proceso_incidente import IncidenteAsignado, Cotizacion
 from models.zona_cobertura import ZonaCobertura
@@ -178,7 +182,7 @@ def create_test_data():
         admin_rol.permisos = permisos
         tecnico_rol.permisos = [p for p in permisos if p.nombre in ['leer_incidente', 'actualizar_incidente', 'leer_solicitud_servicio', 'actualizar_solicitud_servicio', 'leer_usuario', 'ver_dashboard']]
         cliente_rol.permisos = [p for p in permisos if p.nombre in ['crear_incidente', 'leer_incidente', 'crear_vehiculo', 'leer_vehiculo', 'actualizar_vehiculo', 'leer_solicitud_servicio']]
-        gestor_rol.permisos = [p for p in permisos if p.nombre in ['crear_usuario', 'leer_usuario', 'actualizar_usuario', 'crear_solicitud_servicio', 'leer_solicitud_servicio', 'actualizar_solicitud_servicio', 'asignar_tecnico', 'leer_incidente', 'ver_dashboard']]
+        gestor_rol.permisos = [p for p in permisos if p.nombre in ['crear_usuario', 'leer_usuario', 'actualizar_usuario', 'crear_solicitud_servicio', 'leer_solicitud_servicio', 'actualizar_solicitud_servicio', 'crear_tecnico','leer_tecnico', 'actualizar_tecnico', 'eliminar_tecnico', 'asignar_tecnico', 'leer_incidente', 'ver_dashboard']]
         db.flush()
         print('   ✓ Permisos asignados a roles')
 
@@ -200,8 +204,9 @@ def create_test_data():
         db.add(perfil_gestor_norte)
         db.flush()
 
-        # Talleres del Norte (Santa Cruz de la Sierra)
+        # 🌟 MODIFICACIÓN (Opción B): Añadido id_usuario_admin vinculando a Bryan (u_admin.id_usuario)
         taller_n1 = Taller(
+            id_usuario_admin=u_admin.id_usuario,
             id_gestor=perfil_gestor_norte.id_gestor,
             nombre='Norteño Express - Santa Cruz',
             direccion='Downtown Santa Cruz, Bolivia',
@@ -210,6 +215,7 @@ def create_test_data():
             fecha_registro=func.NOW()
         )
         taller_n2 = Taller(
+            id_usuario_admin=u_admin.id_usuario,
             id_gestor=perfil_gestor_norte.id_gestor,
             nombre='EuroTaller - Santa Cruz',
             direccion='Av. Banzer, Bolivia',
@@ -252,8 +258,9 @@ def create_test_data():
         db.add(perfil_gestor_sur)
         db.flush()
 
-        # Talleres del Sur (Santa Cruz de la Sierra)
+        # 🌟 MODIFICACIÓN (Opción B): Añadido id_usuario_admin vinculando a Bryan (u_admin.id_usuario)
         taller_s1 = Taller(
+            id_usuario_admin=u_admin.id_usuario,
             id_gestor=perfil_gestor_sur.id_gestor,
             nombre='Taller Central - Santa Cruz',
             direccion='Av. Busch, 2do Anillo, Santa Cruz',
@@ -262,6 +269,7 @@ def create_test_data():
             fecha_registro=func.NOW()
         )
         taller_s2 = Taller(
+            id_usuario_admin=u_admin.id_usuario,
             id_gestor=perfil_gestor_sur.id_gestor,
             nombre='Taller Austral - Santa Cruz',
             direccion='Av. Corrientes,Santa Cruz',
@@ -288,14 +296,14 @@ def create_test_data():
 
         db.commit()
         print('\n✨ Base de datos consolidada e inicializada exitosamente')
-        print('\n📝 RESUMEN DE LA ARQUITECTURA DISTRIBUIDA:')
+        print('\n📝 RESUMEN DE LA ARQUITECTURA DISTRIBUIDA (OPCIÓN B):')
         print(f'   - {len(roles_data)} Roles Base del Sistema (RBAC)')
         print(f'   - {len(permisos)} Permisos Estrictos Mapeados')
         print(f'   - 3 Planes SaaS Disponibles')
         print(f'   - 1 Proveedor Global (superAdmin)')
-        print(f'   - 1 Administrador Central (Dueño con Suscripción Activa)')
-        print(f'   - 2 Gestores de Talleres distribuidos por Hemisferio (Tenants)')
-        print(f'   - 4 Establecimientos Físicos con PostGIS Activado')
+        print(f'   - 1 Administrador Central (Bryan Arauz - Tenant Owner con 4 Talleres directos)')
+        print(f'   - 2 Gestores asignados de manera flexible a las sucursales')
+        print(f'   - 4 Establecimientos Físicos con PostGIS vinculados directamente al Administrador')
         print(f'   - 8 Técnicos Operativos distribuidos y aislados')
 
     except Exception as e:
@@ -310,7 +318,7 @@ def create_test_data():
 if __name__ == '__main__':
     try:
         print('=' * 60)
-        print('🔄 REINICIANDO ENTIDADES - ARQUITECTURA MULTI-TENANT')
+        print('🔄 REINICIANDO ENTIDADES - ARQUITECTURA MULTI-TENANT (OPCION B)')
         print('=' * 60)
         reset_database()
         create_test_data()
