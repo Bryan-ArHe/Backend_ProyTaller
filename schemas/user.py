@@ -61,6 +61,18 @@ class UsuarioCreate(BaseModel):
     password: str = Field(..., min_length=8, max_length=72, description="Contraseña (max 72 caracteres - limitación de bcrypt)")
     id_rol: int
 
+    # --- Datos del perfil de extensión GESTOR_TALLER (solo aplican cuando id_rol == 3) ---
+    razon_social: Optional[str] = Field(
+        None,
+        max_length=150,
+        description="Razón social del gestor. Solo se usa al crear un Gestor (id_rol=3).",
+    )
+    nit: Optional[str] = Field(
+        None,
+        max_length=30,
+        description="NIT del gestor (único). Solo se usa al crear un Gestor (id_rol=3).",
+    )
+
 class UsuarioResponse(BaseModel):
     """Esquema estándar de respuesta de usuario [cite: 3]"""
     id_usuario: int

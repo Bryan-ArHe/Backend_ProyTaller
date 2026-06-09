@@ -4,9 +4,11 @@ Módulo 1: Identidad y Accesos - Endpoints para CRUD de usuarios y perfiles
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, joinedload
 from models.database import get_db
 from models.user import SuscripcionTaller, Usuario, Rol, EstadoCuenta
+from models.gestor import GestorTaller
 from schemas.user import (
     UsuarioResponse,
     UsuarioUpdate,
@@ -18,6 +20,23 @@ from crud import usuarios as crud_usuarios
 from utils.bitacora_helper import registrar_evento_bitacora
 from security.password import hash_password
 from typing import List
+
+# ============================================================================
+# JERARQUÍA DE ROLES (RBAC por ID) - Catálogo sincronizado con reset_db.py
+# ============================================================================
+ROL_SUPERADMIN = 1
+ROL_ADMINISTRADOR = 2
+ROL_GESTOR = 3
+ROL_TECNICO = 4
+ROL_CLIENTE = 5
+
+# Roles que cada nivel jerárquico tiene permitido CREAR.
+# - El Administrador (dueño de la empresa) solo crea roles operativos.
+# - Crear Administradores es un privilegio exclusivo del superAdmin.
+ROLES_PERMITIDOS_POR_CREADOR = {
+    "superAdmin": {ROL_SUPERADMIN, ROL_ADMINISTRADOR, ROL_GESTOR, ROL_TECNICO, ROL_CLIENTE},
+    "Administrador": {ROL_GESTOR, ROL_TECNICO, ROL_CLIENTE},
+}
 
 # Crear el router de usuarios
 router = APIRouter(
@@ -267,14 +286,29 @@ def crear_usuario_admin(
     current_user: UsuarioResponse = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    # Verificar que el usuario actual sea administrador
-    if current_user.rol.nombre not in ["Administrador", "superAdmin"]:
+    # 1. Verificar que el usuario actual pertenezca a la jerarquía administrativa
+    rol_creador = current_user.rol.nombre if current_user.rol else None
+    if rol_creador not in ROLES_PERMITIDOS_POR_CREADOR:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Solo administradores o superAdmin pueden crear nuevos usuarios"
-    )
-    
-    # Verificar que el email no esté registrado
+        )
+
+    # 2. Validar la jerarquía de creación (RBAC por ID de rol).
+    #    El Administrador solo puede crear Gestor (3), Tecnico (4) y Cliente (5).
+    #    Crear Administradores o superAdmins es exclusivo del superAdmin.
+    roles_permitidos = ROLES_PERMITIDOS_POR_CREADOR[rol_creador]
+    if usuario_data.id_rol not in roles_permitidos:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                f"El rol '{rol_creador}' no tiene privilegios para crear usuarios con "
+                f"el rol ID {usuario_data.id_rol}. La creación de Administradores está "
+                f"reservada al superAdmin."
+            )
+        )
+
+    # 3. Verificar que el email no esté registrado
     usuario_existente = db.query(Usuario).filter(
         Usuario.email == usuario_data.email
     ).first()
@@ -285,7 +319,7 @@ def crear_usuario_admin(
             detail=f"El email '{usuario_data.email}' ya está registrado"
         )
     
-    # Verificar que el rol exista
+    # 4. Verificar que el rol exista en el catálogo físico
     rol = db.query(Rol).filter(Rol.id_rol == usuario_data.id_rol).first()
     if not rol:
         raise HTTPException(
@@ -296,37 +330,69 @@ def crear_usuario_admin(
     # Hashear la contraseña (truncar a 72 bytes en UTF-8)
     password_truncated = usuario_data.password.encode('utf-8')[:72].decode('utf-8', errors='ignore')
     password_hash = hash_password(password_truncated)
-    
-    # Crear el nuevo usuario
-    nuevo_usuario = Usuario(
-        nombre=usuario_data.nombre,
-        apellido=usuario_data.apellido,
-        email=usuario_data.email,
-        telefono=usuario_data.telefono,
-        password_hash=password_hash,
-        id_rol=usuario_data.id_rol,
-        estado_cuenta=EstadoCuenta.ACTIVO
-    )
-    
-    # Guardar en la base de datos
-    db.add(nuevo_usuario)
-    db.flush()
-    
-    # Registrar evento CREATE en bitácora
-    registrar_evento_bitacora(
-        db=db,
-        request=request,
-        id_usuario=current_user.id_usuario,
-        nombre_usuario=f"{current_user.nombre} {current_user.apellido}",
-        evento="CREATE",
-        recurso="USUARIO",
-        accion=f"Admin creó nuevo usuario: {nuevo_usuario.email} (Rol: {rol.nombre})"
-    )
-    
-    db.commit()
-    db.refresh(nuevo_usuario)
-    
-    # Cargar el rol para la respuesta
+
+    # 5. Inserción atómica: tabla raíz 'usuario' + tabla de extensión 'gestor_taller'.
+    #    Si cualquier paso falla se hace ROLLBACK para no dejar datos huérfanos.
+    try:
+        nuevo_usuario = Usuario(
+            nombre=usuario_data.nombre,
+            apellido=usuario_data.apellido,
+            email=usuario_data.email,
+            telefono=usuario_data.telefono,
+            password_hash=password_hash,
+            id_rol=usuario_data.id_rol,
+            estado_cuenta=EstadoCuenta.ACTIVO
+        )
+
+        # 5.a Poblar la tabla raíz y obtener la PK (id_usuario) con flush()
+        db.add(nuevo_usuario)
+        db.flush()
+
+        # 5.b Si es un Gestor (rol 3), inicializar OBLIGATORIAMENTE su perfil de
+        #     extensión en GESTOR_TALLER, mapeando la FK al usuario recién creado.
+        if usuario_data.id_rol == ROL_GESTOR:
+            razon_social = (usuario_data.razon_social or "").strip() or \
+                f"{nuevo_usuario.nombre} {nuevo_usuario.apellido}".strip()
+            # nit es NOT NULL y único; si no se envía generamos un placeholder único
+            # basado en la PK para permitir completar el perfil más adelante.
+            nit = (usuario_data.nit or "").strip() or f"PENDIENTE-{nuevo_usuario.id_usuario}"
+
+            perfil_gestor = GestorTaller(
+                id_gestor=nuevo_usuario.id_usuario,
+                razon_social=razon_social,
+                nit=nit,
+                activo=True,
+            )
+            db.add(perfil_gestor)
+            db.flush()
+
+        # 5.c Registrar evento CREATE en bitácora (dentro de la misma transacción)
+        registrar_evento_bitacora(
+            db=db,
+            request=request,
+            id_usuario=current_user.id_usuario,
+            nombre_usuario=f"{current_user.nombre} {current_user.apellido}",
+            evento="CREATE",
+            recurso="USUARIO",
+            accion=f"Admin creó nuevo usuario: {nuevo_usuario.email} (Rol: {rol.nombre})"
+        )
+
+        # 5.d Confirmar la transacción completa
+        db.commit()
+        db.refresh(nuevo_usuario)
+    except HTTPException:
+        # Errores de negocio controlados: revertir y re-propagar
+        db.rollback()
+        raise
+    except SQLAlchemyError as exc:
+        # Falla a nivel de BD (ej: nit duplicado en gestor_taller) -> ROLLBACK total
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"No se pudo crear el usuario. La operación fue revertida: {str(exc.orig) if getattr(exc, 'orig', None) else str(exc)}"
+        )
+
+    # 6. Cargar el rol para la respuesta
     nuevo_usuario = db.query(Usuario).options(
         joinedload(Usuario.rol)
     ).filter(Usuario.id_usuario == nuevo_usuario.id_usuario).first()
