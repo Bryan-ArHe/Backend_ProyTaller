@@ -6,6 +6,7 @@ Usa security/password.py para la verificación de contraseñas con bcrypt
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from models.database import get_db
 from models.user import Usuario
 from security.jwt_handler import create_access_token
@@ -160,13 +161,45 @@ def login(
     return {"access_token": access_token, "token_type": "bearer"}
 
 
-@router.get("/me", response_model=UsuarioResponse)
-def leer_mi_perfil(current_user: Usuario = Depends(get_current_user)):
+@router.get("/me")
+def leer_mi_perfil(
+    current_user: any = Depends(get_current_user)
+):
     """
-    Obtener datos del usuario autenticado.
-    
-    **Requiere:** Token JWT válido en header `Authorization: Bearer <token>`
-    
-    **Retorna:** Perfil completo del usuario autenticado
+    Retorna el perfil del usuario autenticado mapeando directamente 
+    las propiedades nativas de la instancia de SQLAlchemy.
     """
-    return current_user
+    # 🌟 CORRECCIÓN: Usamos el operador 'in' nativo de Python para evaluar strings
+    user_instance = current_user
+    if isinstance(current_user, tuple) or "Row" in str(type(current_user)):
+        user_instance = current_user[0]
+
+    # Extraemos las propiedades atómicas directas del objeto mapeado
+    id_usuario = getattr(user_instance, "id_usuario", None)
+    nombre = getattr(user_instance, "nombre", "Usuario")
+    apellido = getattr(user_instance, "apellido", "Sistema")
+    email = getattr(user_instance, "email", "sin-email@taller.com")
+    telefono = getattr(user_instance, "telefono", "")
+    estado = getattr(user_instance, "estado_cuenta", "ACTIVO")
+    
+    # 🌟 Intentamos leer 'id_rol' o la columna directa 'rol' que arrojó tu log de consola
+    id_rol_raw = getattr(user_instance, "id_rol", None) or getattr(user_instance, "rol", None)
+    
+    if id_rol_raw is not None:
+        id_rol = int(id_rol_raw)
+    else:
+        id_rol = 3 # Cambiamos el salvavidas a 3 (Gestor) por si estás probando este flujo
+        
+    role_map = {1: 'superAdmin', 2: 'Administrador', 3: 'Gestor', 4: 'Tecnico', 5: 'Cliente'}
+    rol_nombre = role_map.get(id_rol, 'Gestor')
+
+    return {
+        "id_usuario": id_usuario,
+        "nombre": nombre,
+        "apellido": apellido,
+        "email": email,
+        "telefono": telefono,
+        "id_rol": id_rol,
+        "rol_nombre": rol_nombre,
+        "estado_cuenta": estado
+    }

@@ -191,6 +191,7 @@ app.include_router(saas.router)
 
 
 
+
 # Endpoint raíz para verificar que la API está activa
 @app.get("/", tags=["Health Check"])
 def root():

@@ -1,11 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.ext.asyncio import AsyncSession
+from models.user import Usuario
 from models.tecnico import Tecnico
 from models.taller import Taller
-from schemas.tecnico import TecnicoSimpleResponse
+from schemas.tecnico import TecnicoSimpleResponse, TecnicoCreate, TecnicoBase
 from dependencies import get_db
 from auth.dependencies import get_current_gestor_id
-
+from auth.dependencies import check_tenant_active, verify_tenant_quota
 router = APIRouter(prefix="/tecnicos", tags=["Técnicos"])
 
 # Dentro de routers/tecnico.py
@@ -65,3 +67,47 @@ def listar_tecnicos_libres(
     ).all()
     
     return [mapear_tecnico_a_dict(t) for t in tecnicos_libres]
+
+@router.post("/crear-tecnico")
+async def registrar_operador_ruta(
+    payload: TecnicoCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(check_tenant_active)
+):
+    # 1. Determinar de forma segura el id_gestor (Tenant ID) según el Rol del usuario autenticado
+    if current_user.id_rol == 2:
+        # Si es el Administrador (Dueño de la franquicia), su id_usuario es la raíz del Tenant
+        tenant_id = current_user.id_usuario
+    elif current_user.id_rol == 3:
+        # Si es un Gestor, el Tenant ID se extrae buscando de forma asíncrona el dueño del taller asignado
+        from sqlalchemy import text
+        if not current_user.id_taller_asignado:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="El Gestor no tiene un taller asignado para poder registrar personal."
+            )
+        
+        query_taller = await db.execute(
+            text("SELECT id_gestor FROM TALLER WHERE id_taller = :taller_id"),
+            {"taller_id": current_user.id_taller_asignado}
+        )
+        tenant_id = query_taller.scalar_one_or_none()
+    else:
+        # Los roles 4 (Técnico) y 5 (Cliente) no tienen permitido bajo ninguna circunstancia crear técnicos
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Su rol no posee los privilegios necesarios para registrar operadores técnicos."
+        )
+
+    if not tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No se pudo asociar la solicitud a un Tenant corporativo válido."
+        )
+
+    # 2. VALIDACIÓN DE CUOTA: Detiene el flujo de la base de datos si el plan SaaS está lleno
+    await verify_tenant_quota(resource_type="TECNICO", tenant_id=tenant_id, db=db)
+    
+    # 3. CONTINUACIÓN DEL FLUJO OPERATIVO (Inserción Atómica de datos reales)
+    # Aquí puedes proceder con tu lógica original del script (por ejemplo, usando db.add() y await db.commit())
+    # ...

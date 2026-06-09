@@ -41,13 +41,14 @@ class Usuario(Base):
     
     id_usuario = Column(Integer, primary_key=True, index=True)
     id_rol = Column(Integer, ForeignKey("rol.id_rol"), nullable=False)
+    id_taller_asignado = Column(Integer, ForeignKey("taller.id_taller"), nullable=True)
     
     nombre = Column(String(100), nullable=False)
     apellido = Column(String(100), nullable=False)
     email = Column(String(100), unique=True, nullable=False, index=True)
     telefono = Column(String(20), unique=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
-    estado_cuenta = Column(Enum(EstadoCuenta), default=EstadoCuenta.ACTIVO)
+    estado_cuenta = Column(Enum(EstadoCuenta), default=EstadoCuenta.ACTIVO, native_enum=False)
     # Cambiado a datetime.utcnow sin los paréntesis () para que se ejecute en caliente al insertar
     fecha_registro = Column(DateTime, default=datetime.utcnow)
 

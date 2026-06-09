@@ -7,6 +7,7 @@ Uso: python reset_db.py
 import sys
 import hashlib
 import traceback
+import bcrypt
 from sqlalchemy import text, func
 from models.database import SessionLocal, engine, Base
 from datetime import datetime, timedelta
@@ -33,8 +34,14 @@ from models.bitacora import Bitacora
 # =============================================
 
 def hash_seguro_defensivo(password: str) -> str:
-    """Genera hash SHA-256 compatible con el puente de seguridad de la autenticación"""
-    return hashlib.sha256(password.encode('utf-8')).hexdigest()
+    """Genera un hash Bcrypt real compatible con la función verify_password del backend"""
+    # Pasamos la contraseña a bytes
+    password_bytes = password.encode('utf-8')
+    # Generamos la sal y el hash nativo
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(password_bytes, salt)
+    # Lo devolvemos como string para que se almacene perfectamente en tu columna VARCHAR(255)
+    return hashed.decode('utf-8')
 
 
 def reset_database():
@@ -117,7 +124,7 @@ def create_test_data():
         )
         db.add(sadmin_user)
         
-        # 2. Crear al Administrador (Dueño de la Franquicia Global de Talleres)
+        # 2. Crear al Administrador (Dueño de la Franquicia Global de Talleres - Tenant Owner)
         u_admin = Usuario(
             nombre='Bryan', 
             apellido='Arauz', 
@@ -187,27 +194,15 @@ def create_test_data():
         print('   ✓ Permisos asignados a roles')
 
         # =====================================================================
-        # 🌍 SECCIÓN 2: TENANT HEMISFERIO NORTE
+        # 🌍 SECCIÓN 2: INSTALACIÓN E INFRAESTRUCTURA DE TALLERES FÍSICOS
         # =====================================================================
-        print('\n🌍 CONFIGURANDO TENANT: HEMISFERIO NORTE...')
+        print('\n🏗️  ESTABLECIENDO SUCURSALES FÍSICAS (POSTGIS)...')
         
-        u_gestor_norte = Usuario(
-            nombre='Carlos', apellido='Mendoza', 
-            email='gestor.norte@taller.com', telefono='+59170000001',
-            password_hash=hash_seguro_defensivo('gestor123'),
-            id_rol=gestor_rol.id_rol, estado_cuenta=EstadoCuenta.ACTIVO
-        )
-        db.add(u_gestor_norte)
-        db.flush()
-
-        perfil_gestor_norte = GestorTaller(usuario=u_gestor_norte, razon_social='Talleres del Norte Corp', nit='123456789', activo=True)
-        db.add(perfil_gestor_norte)
-        db.flush()
-
-        # 🌟 MODIFICACIÓN (Opción B): Añadido id_usuario_admin vinculando a Bryan (u_admin.id_usuario)
+        # Insertamos los talleres amarrados a Bryan (u_admin) como id_usuario_admin.
+        # Seteamos id_gestor = None para no violar la fkey de la tabla gestor_taller.
         taller_n1 = Taller(
-            id_usuario_admin=u_admin.id_usuario,
-            id_gestor=perfil_gestor_norte.id_gestor,
+            id_usuario_admin=u_admin.id_usuario, 
+            id_gestor=None, 
             nombre='Norteño Express - Santa Cruz',
             direccion='Downtown Santa Cruz, Bolivia',
             telefono='+59170000001',
@@ -216,52 +211,16 @@ def create_test_data():
         )
         taller_n2 = Taller(
             id_usuario_admin=u_admin.id_usuario,
-            id_gestor=perfil_gestor_norte.id_gestor,
+            id_gestor=None,
             nombre='EuroTaller - Santa Cruz',
             direccion='Av. Banzer, Bolivia',
             telefono='+59170000002',
             ubicacion=func.ST_GeomFromText('POINT(-63.182130 -17.783120)', 4326),
             fecha_registro=func.NOW()
         )
-        db.add_all([taller_n1, taller_n2])
-        db.flush()
-
-        # Técnicos del Taller Norte 1 (tecnico1 y tecnico2)
-        for i, (nom, ape) in enumerate([("John", "Doe"), ("Robert", "Smith")], start=1):
-            u_tec = Usuario(nombre=nom, apellido=ape, email=f"tecnico{i}.norte@example.com", telefono=f"+10000000{i}", password_hash=hash_seguro_defensivo("tecnico123"), id_rol=tecnico_rol.id_rol, estado_cuenta=EstadoCuenta.ACTIVO)
-            db.add(u_tec); db.flush()
-            t_tec = Tecnico(usuario=u_tec, id_taller=taller_n1.id_taller, id_gestor=perfil_gestor_norte.id_gestor, especialidad='Mecánica General', disponibilidad='Libre')
-            db.add(t_tec)
-
-        # Técnicos del Taller Norte 2 (tecnico3 y tecnico4)
-        for i, (nom, ape) in enumerate([("Jean", "Dupont"), ("Hans", "Müller")], start=3):
-            u_tec = Usuario(nombre=nom, apellido=ape, email=f"tecnico{i}.norte@example.com", telefono=f"+10000000{i}", password_hash=hash_seguro_defensivo("tecnico123"), id_rol=tecnico_rol.id_rol, estado_cuenta=EstadoCuenta.ACTIVO)
-            db.add(u_tec); db.flush()
-            t_tec = Tecnico(usuario=u_tec, id_taller=taller_n2.id_taller, id_gestor=perfil_gestor_norte.id_gestor, especialidad='Sistemas de Inyección', disponibilidad='Libre')
-            db.add(t_tec)
-
-        # =====================================================================
-        # 🌍 SECCIÓN 3: TENANT HEMISFERIO SUR
-        # =====================================================================
-        print('\n🌍 CONFIGURANDO TENANT: HEMISFERIO SUR...')
-        
-        u_gestor_sur = Usuario(
-            nombre='Andrés', apellido='Silva', 
-            email='gestor.sur@taller.com', telefono='+59170000002',
-            password_hash=hash_seguro_defensivo('gestor123'),
-            id_rol=gestor_rol.id_rol, estado_cuenta=EstadoCuenta.ACTIVO
-        )
-        db.add(u_gestor_sur)
-        db.flush()
-
-        perfil_gestor_sur = GestorTaller(usuario=u_gestor_sur, razon_social='Consorcio Mecánico del Sur', nit='987654321', activo=True)
-        db.add(perfil_gestor_sur)
-        db.flush()
-
-        # 🌟 MODIFICACIÓN (Opción B): Añadido id_usuario_admin vinculando a Bryan (u_admin.id_usuario)
         taller_s1 = Taller(
             id_usuario_admin=u_admin.id_usuario,
-            id_gestor=perfil_gestor_sur.id_gestor,
+            id_gestor=None,
             nombre='Taller Central - Santa Cruz',
             direccion='Av. Busch, 2do Anillo, Santa Cruz',
             telefono='+59170000011',
@@ -270,24 +229,94 @@ def create_test_data():
         )
         taller_s2 = Taller(
             id_usuario_admin=u_admin.id_usuario,
-            id_gestor=perfil_gestor_sur.id_gestor,
+            id_gestor=None,
             nombre='Taller Austral - Santa Cruz',
-            direccion='Av. Corrientes,Santa Cruz',
+            direccion='Av. Corrientes, Santa Cruz',
             telefono='+59170000022',
             ubicacion=func.ST_GeomFromText('POINT(-63.182130 -17.783120)', 4326),
             fecha_registro=func.NOW()
         )
-        db.add_all([taller_s1, taller_s2])
+        db.add_all([taller_n1, taller_n2, taller_s1, taller_s2])
+        db.flush() # Sincroniza y genera los id_taller sin violar restricciones físicas
+
+        # =====================================================================
+        # 🌍 SECCIÓN 3: CONFIGURANDO OPERADORES DEL TENANT (GESTORES ROL 3)
+        # =====================================================================
+        print('\n🌍 CONFIGURANDO GESTORES ASIGNADOS (CU33)...')
+        
+        # Gestor 1: Encargado de Taller Norte 1
+        u_gestor_norte = Usuario(
+            nombre='Carlos', apellido='Mendoza', 
+            email='gestor.norte@taller.com', telefono='+59170000001',
+            password_hash=hash_seguro_defensivo('gestor123'),
+            id_rol=gestor_rol.id_rol, estado_cuenta=EstadoCuenta.ACTIVO,
+            id_taller_asignado=taller_n1.id_taller 
+        )
+        db.add(u_gestor_norte)
         db.flush()
 
-        # Técnicos del Taller Sur 1 (tecnico1 y tecnico2)
+        perfil_gestor_norte = GestorTaller(
+            usuario=u_gestor_norte, 
+            razon_social='Talleres del Norte Corp', 
+            nit='123456789', 
+            activo=True
+        )
+        db.add(perfil_gestor_norte)
+        db.flush() # Genera el id_gestor válido en gestor_taller
+
+        # Gestor 2: Encargado de Taller Sur 1
+        u_gestor_sur = Usuario(
+            nombre='Andrés', apellido='Silva', 
+            email='gestor.sur@taller.com', telefono='+59170000002',
+            password_hash=hash_seguro_defensivo('gestor123'),
+            id_rol=gestor_rol.id_rol, estado_cuenta=EstadoCuenta.ACTIVO,
+            id_taller_asignado=taller_s1.id_taller 
+        )
+        db.add(u_gestor_sur)
+        db.flush()
+
+        perfil_gestor_sur = GestorTaller(
+            usuario=u_gestor_sur, 
+            razon_social='Consorcio Mecánico del Sur', 
+            nit='987654321', 
+            activo=True
+        )
+        db.add(perfil_gestor_sur)
+        db.flush() # Genera el id_gestor válido en gestor_taller
+
+        # 🌟 IMPACTAR LAS JEFATURAS OPERATIVAS: Ahora que existen perfiles comerciales en gestor_taller,
+        # actualizamos las tablas físicas cumpliendo de manera estricta las restricciones referenciales.
+        taller_n1.id_gestor = perfil_gestor_norte.id_gestor
+        taller_s1.id_gestor = perfil_gestor_sur.id_gestor
+        db.flush()
+
+        # =====================================================================
+        # 🌍 SECCIÓN 4: NÓMINA OPERATIVA AISLADA (TÉCNICOS ROL 4)
+        # =====================================================================
+        print('\n👷 SEMBRANDO NÓMINA DE TÉCNICOS EN RUTA...')
+
+        # Técnicos del Taller Norte 1 (tecnico1 y tecnico2) -> Vinculados al Gestor del Norte
+        for i, (nom, ape) in enumerate([("John", "Doe"), ("Robert", "Smith")], start=1):
+            u_tec = Usuario(nombre=nom, apellido=ape, email=f"tecnico{i}.norte@example.com", telefono=f"+10000000{i}", password_hash=hash_seguro_defensivo("tecnico123"), id_rol=tecnico_rol.id_rol, estado_cuenta=EstadoCuenta.ACTIVO)
+            db.add(u_tec); db.flush()
+            t_tec = Tecnico(usuario=u_tec, id_taller=taller_n1.id_taller, id_gestor=perfil_gestor_norte.id_gestor, especialidad='Mecánica General', disponibilidad='Libre')
+            db.add(t_tec)
+
+        # Técnicos del Taller Norte 2 (tecnico3 y tecnico4) -> Vinculados al Gestor del Norte
+        for i, (nom, ape) in enumerate([("Jean", "Dupont"), ("Hans", "Müller")], start=3):
+            u_tec = Usuario(nombre=nom, apellido=ape, email=f"tecnico{i}.norte@example.com", telefono=f"+10000000{i}", password_hash=hash_seguro_defensivo("tecnico123"), id_rol=tecnico_rol.id_rol, estado_cuenta=EstadoCuenta.ACTIVO)
+            db.add(u_tec); db.flush()
+            t_tec = Tecnico(usuario=u_tec, id_taller=taller_n2.id_taller, id_gestor=perfil_gestor_norte.id_gestor, especialidad='Sistemas de Inyección', disponibilidad='Libre')
+            db.add(t_tec)
+
+        # Técnicos del Taller Sur 1 (tecnico1 y tecnico2 del sur) -> Vinculados al Gestor del Sur
         for i, (nom, ape) in enumerate([("Hugo", "Chávez"), ("Mario", "Flores")], start=1):
             u_tec = Usuario(nombre=nom, apellido=ape, email=f"tecnico{i}.sur@example.com", telefono=f"+5917000001{i}", password_hash=hash_seguro_defensivo("tecnico123"), id_rol=tecnico_rol.id_rol, estado_cuenta=EstadoCuenta.ACTIVO)
             db.add(u_tec); db.flush()
             t_tec = Tecnico(usuario=u_tec, id_taller=taller_s1.id_taller, id_gestor=perfil_gestor_sur.id_gestor, especialidad='Alineación y Balanceo', disponibilidad='Libre')
             db.add(t_tec)
 
-        # Técnicos del Taller Sur 2 (tecnico3 y tecnico4)
+        # Técnicos del Taller Sur 2 (tecnico3 y tecnico4 del sur) -> Vinculados al Gestor del Sur
         for i, (nom, ape) in enumerate([("Diego", "Maradona"), ("Lionel", "Messi")], start=3):
             u_tec = Usuario(nombre=nom, apellido=ape, email=f"tecnico{i}.sur@example.com", telefono=f"+5917000002{i}", password_hash=hash_seguro_defensivo("tecnico123"), id_rol=tecnico_rol.id_rol, estado_cuenta=EstadoCuenta.ACTIVO)
             db.add(u_tec); db.flush()
@@ -296,13 +325,13 @@ def create_test_data():
 
         db.commit()
         print('\n✨ Base de datos consolidada e inicializada exitosamente')
-        print('\n📝 RESUMEN DE LA ARQUITECTURA DISTRIBUIDA (OPCIÓN B):')
+        print('\n📝 RESUMEN DE LA ARQUITECTURA DISTRIBUIDA MULTI-TENANT:')
         print(f'   - {len(roles_data)} Roles Base del Sistema (RBAC)')
         print(f'   - {len(permisos)} Permisos Estrictos Mapeados')
         print(f'   - 3 Planes SaaS Disponibles')
         print(f'   - 1 Proveedor Global (superAdmin)')
         print(f'   - 1 Administrador Central (Bryan Arauz - Tenant Owner con 4 Talleres directos)')
-        print(f'   - 2 Gestores asignados de manera flexible a las sucursales')
+        print(f'   - 2 Gestores operativos vinculados con aislamiento inmutable a sus sucursales')
         print(f'   - 4 Establecimientos Físicos con PostGIS vinculados directamente al Administrador')
         print(f'   - 8 Técnicos Operativos distribuidos y aislados')
 
@@ -318,7 +347,7 @@ def create_test_data():
 if __name__ == '__main__':
     try:
         print('=' * 60)
-        print('🔄 REINICIANDO ENTIDADES - ARQUITECTURA MULTI-TENANT (OPCION B)')
+        print('🔄 REINICIANDO ENTIDADES - ARQUITECTURA MULTI-TENANT')
         print('=' * 60)
         reset_database()
         create_test_data()
