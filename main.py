@@ -189,30 +189,6 @@ app.include_router(solicitudes.router)
 app.include_router(saas.router)
 
 
-
-
-# Endpoint raíz para verificar que la API está activa
-@app.get("/", tags=["Health Check"])
-def root():
-    """
-    Endpoint de prueba para verificar que la API está activa
-    """
-    return {
-        "mensaje": "Bienvenido a la Plataforma Inteligente de Atención de Emergencias Vehiculares",
-        "version": settings.api_version,
-        "docs": "/docs",
-        "redoc": "/redoc"
-    }
-
-
-@app.get("/health", tags=["Health Check"])
-def health_check():
-    """
-    Endpoint de health check para monitoreo
-    """
-    return {"status": "ok"}
-
-
 # Ejecutar la aplicación
 if __name__ == "__main__":
     import uvicorn
